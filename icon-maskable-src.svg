@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="0.4" y2="1">
+    <stop offset="0" stop-color="#272d6b"/><stop offset=".55" stop-color="#141838"/><stop offset="1" stop-color="#0a0c18"/>
+  </linearGradient>
+  <radialGradient id="glow" cx="50%" cy="46%" r="54%">
+    <stop offset="0" stop-color="#ffd54a" stop-opacity=".62"/>
+    <stop offset="52%" stop-color="#ff9f1a" stop-opacity=".20"/>
+    <stop offset="100%" stop-color="#ff9f1a" stop-opacity="0"/>
+  </radialGradient>
+  <radialGradient id="glass" cx="35%" cy="26%" r="82%">
+    <stop offset="0" stop-color="#fffdf2"/><stop offset="40%" stop-color="#ffe766"/><stop offset="100%" stop-color="#ef9e00"/>
+  </radialGradient>
+  <linearGradient id="metal" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#e6ecf7"/><stop offset=".5" stop-color="#9aa5b8"/><stop offset="1" stop-color="#657084"/>
+  </linearGradient>
+  <linearGradient id="bolt" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#fffbd6"/><stop offset="1" stop-color="#ffbe12"/>
+  </linearGradient>
+</defs>
+
+<rect width="512" height="512" fill="url(#bg)"/>
+<circle cx="256" cy="248" r="256" fill="url(#glow)"/>
+
+<g transform="translate(256,256) scale(0.78) translate(-256,-256)">
+<!-- antenna bolt (behind bulb) -->
+<path d="M244 26 L192 122 L230 122 L206 190 L292 96 L252 96 L284 26 Z"
+      fill="url(#bolt)" stroke="#e08c00" stroke-width="8" stroke-linejoin="round"/>
+
+<!-- screw base -->
+<path d="M168 372 L344 372 L332 446 Q332 464 312 464 L200 464 Q180 464 180 446 Z" fill="url(#metal)"/>
+<path d="M168 372 L344 372 L342 391 L170 391 Z" fill="#d2dae7"/>
+<path d="M174 408 H338 M179 431 H333" stroke="rgba(0,0,0,.24)" stroke-width="8" stroke-linecap="round"/>
+
+<!-- glass bulb -->
+<path d="M256 112 C 333 112 396 172 396 246 C 396 300 366 340 352 380 L 160 380 C 146 340 116 300 116 246 C 116 172 179 112 256 112 Z"
+      fill="url(#glass)"/>
+<path d="M168 214 C 182 178 210 158 234 152" stroke="#ffffff" stroke-opacity=".72" stroke-width="27" stroke-linecap="round" fill="none"/>
+
+<!-- cheeks -->
+<ellipse cx="146" cy="304" rx="30" ry="21" fill="#ff8a3d" opacity=".95"/>
+<ellipse cx="366" cy="304" rx="30" ry="21" fill="#ff8a3d" opacity=".95"/>
+
+<!-- happy eyes -->
+<path d="M164 262 q30 -40 60 0" stroke="#33240c" stroke-width="16" fill="none" stroke-linecap="round"/>
+<path d="M288 262 q30 -40 60 0" stroke="#33240c" stroke-width="16" fill="none" stroke-linecap="round"/>
+
+<!-- smile -->
+<path d="M216 296 q40 54 80 0 q-40 19 -80 0 z" fill="#33240c"/>
+<path d="M244 328 q11 -13 24 -5 q-9 13 -24 5 z" fill="#ff7a8a"/>
+</g>
+</svg>

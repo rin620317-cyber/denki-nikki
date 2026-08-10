@@ -1,0 +1,1432 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b0d1a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>でんき日記</title>
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="apple-touch-icon" sizes="180x180" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="でんき日記">
+<meta name="application-name" content="でんき日記">
+<meta name="robots" content="noindex, nofollow">
+<style>
+:root{
+  --bg:#0b0d1a;
+  --bg2:#12152a;
+  --card:rgba(255,255,255,.055);
+  --card2:rgba(255,255,255,.09);
+  --line:rgba(255,255,255,.10);
+  --tx:#eef1f8;
+  --tx2:#9aa3bd;
+  --tx3:#6b7490;
+  --volt:#ffe14d;
+  --volt2:#ffb020;
+  --mint:#5eead4;
+  --sky:#7dd3fc;
+  --rose:#fb7185;
+  --grape:#a78bfa;
+  --ok:#4ade80;
+  --r:18px;
+  --safe:env(safe-area-inset-bottom,0px);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{
+  background:
+    radial-gradient(1200px 700px at 12% -8%, #2a2050 0%, transparent 58%),
+    radial-gradient(900px 600px at 100% 0%, #10334a 0%, transparent 55%),
+    radial-gradient(800px 500px at 50% 120%, #1e1a3d 0%, transparent 60%),
+    var(--bg);
+  background-attachment:fixed;
+  color:var(--tx);
+  font-family:system-ui,-apple-system,"Segoe UI","Hiragino Maru Gothic ProN","Yu Gothic UI",Meiryo,sans-serif;
+  font-size:15px;line-height:1.6;
+  min-height:100dvh;
+  overscroll-behavior-y:none;
+}
+.num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
+h1,h2,h3{margin:0;font-weight:800;letter-spacing:.02em}
+button{font:inherit;color:inherit;border:none;background:none;cursor:pointer}
+input,select,textarea{font:inherit;color:var(--tx);background:rgba(0,0,0,.28);border:1px solid var(--line);border-radius:12px;padding:10px 12px;width:100%}
+input:focus,select,textarea:focus{outline:2px solid rgba(255,225,77,.45);outline-offset:1px}
+select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--tx2) 50%),linear-gradient(135deg,var(--tx2) 50%,transparent 50%);background-position:calc(100% - 18px) 20px,calc(100% - 13px) 20px;background-size:5px 5px,5px 5px;background-repeat:no-repeat}
+label{display:block;font-size:12px;color:var(--tx2);margin:0 0 5px 2px;font-weight:700;letter-spacing:.04em}
+
+/* ---------- shell ---------- */
+#app{max-width:560px;margin:0 auto;padding:0 14px calc(96px + var(--safe));position:relative;z-index:1}
+header.top{
+  position:sticky;top:0;z-index:30;margin:0 -14px;padding:10px 16px 10px;
+  display:flex;align-items:center;gap:10px;
+  background:linear-gradient(180deg,rgba(11,13,26,.92),rgba(11,13,26,.66) 70%,transparent);
+  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+}
+.brand{display:flex;align-items:center;gap:8px;font-size:16px;font-weight:900}
+.brand .zap{filter:drop-shadow(0 0 8px rgba(255,225,77,.7))}
+.lvchip{margin-left:auto;display:flex;align-items:center;gap:8px}
+.pill{display:inline-flex;align-items:center;gap:5px;background:var(--card);border:1px solid var(--line);border-radius:999px;padding:4px 11px;font-size:12px;font-weight:800}
+.pill.lv{background:linear-gradient(135deg,rgba(255,225,77,.22),rgba(255,176,32,.10));border-color:rgba(255,225,77,.35);color:#ffe98a}
+.pill.st{background:linear-gradient(135deg,rgba(251,113,133,.2),rgba(167,139,250,.12));border-color:rgba(251,113,133,.3);color:#ffc2cc}
+
+section.view{display:none;animation:fadeUp .28s ease both}
+section.view.on{display:block}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px;margin:12px 0;backdrop-filter:blur(6px)}
+.card.tight{padding:11px 12px}
+.card h3{font-size:13px;color:var(--tx2);letter-spacing:.08em;margin-bottom:10px;display:flex;align-items:center;gap:7px}
+.card h3 .dot{width:7px;height:7px;border-radius:99px;background:var(--volt);box-shadow:0 0 10px var(--volt)}
+.muted{color:var(--tx2)}
+.tiny{font-size:11.5px;line-height:1.5}
+.hr{height:1px;background:var(--line);margin:12px 0}
+
+/* ---------- mascot stage ---------- */
+.stage{
+  position:relative;border-radius:24px;overflow:hidden;margin:10px 0 0;
+  background:
+    radial-gradient(90% 70% at 50% 108%, rgba(255,225,77,.20), transparent 62%),
+    linear-gradient(170deg,rgba(124,58,237,.20),rgba(14,165,233,.12) 60%,transparent),
+    rgba(255,255,255,.035);
+  border:1px solid var(--line);
+  padding:12px 12px 14px;
+  min-height:250px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;
+}
+.stage .floor{position:absolute;left:50%;bottom:26px;transform:translateX(-50%);width:150px;height:20px;border-radius:50%;background:radial-gradient(closest-side,rgba(255,225,77,.30),transparent);filter:blur(3px)}
+.bubble{
+  position:relative;max-width:94%;margin-bottom:2px;
+  background:rgba(255,255,255,.94);color:#191c2b;font-weight:800;font-size:13.5px;line-height:1.45;
+  padding:9px 14px;border-radius:16px;box-shadow:0 8px 26px rgba(0,0,0,.35);
+  text-align:center;animation:bubIn .4s cubic-bezier(.2,1.5,.4,1) both;
+}
+.bubble:after{content:"";position:absolute;left:50%;bottom:-7px;transform:translateX(-50%);border:8px solid transparent;border-top-color:rgba(255,255,255,.94);border-bottom:0}
+@keyframes bubIn{from{opacity:0;transform:translateY(6px) scale(.9)}to{opacity:1;transform:none}}
+.mwrap{position:relative;width:210px;height:200px;display:grid;place-items:center}
+#mascotBtn{display:block;width:100%;height:100%;position:relative}
+#biri{width:100%;height:100%;overflow:visible;animation:bob 3.4s ease-in-out infinite}
+.mimg{width:88%;height:88%;object-fit:contain;animation:bob 3.4s ease-in-out infinite;filter:drop-shadow(0 8px 20px rgba(0,0,0,.45))}
+@keyframes bob{0%,100%{transform:translateY(0) rotate(0)}50%{transform:translateY(-9px) rotate(-1.2deg)}}
+
+/* moods */
+.eyes-open,.eyes-happy,.eyes-sleep,.eyes-worry,.mouth-n,.mouth-h,.mouth-s,.mouth-w,.zzz,.sweat{display:none}
+.mood-normal  .eyes-open,.mood-normal  .mouth-n{display:block}
+.mood-happy   .eyes-happy,.mood-happy  .mouth-h{display:block}
+.mood-thunder .eyes-happy,.mood-thunder .mouth-h{display:block}
+.mood-sleepy  .eyes-sleep,.mood-sleepy .mouth-s,.mood-sleepy .zzz{display:block}
+.mood-worry   .eyes-worry,.mood-worry  .mouth-w,.mood-worry .sweat{display:block}
+.mood-sleepy #biri{filter:saturate(.55) brightness(.78);animation-duration:5s}
+.mood-worry  #biri{filter:saturate(.9)}
+.mood-thunder #biri{filter:drop-shadow(0 0 16px rgba(255,225,77,.8))}
+#biri .blink{animation:blink 4.6s infinite}
+@keyframes blink{0%,95%,100%{transform:scaleY(1)}97%{transform:scaleY(.08)}}
+
+/* happy pop */
+.stage.pop #biri,.stage.pop .mimg{animation:hop .62s cubic-bezier(.25,1.4,.4,1) 2}
+@keyframes hop{0%{transform:translateY(0) scale(1)}25%{transform:translateY(-26px) scale(1.06,.94)}55%{transform:translateY(0) scale(.94,1.07)}75%{transform:translateY(-6px)}100%{transform:translateY(0) scale(1)}}
+
+/* thunder */
+.flash{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:200}
+.stage.thunder .boltlayer{opacity:1}
+.boltlayer{position:absolute;inset:0;opacity:0;pointer-events:none;z-index:5}
+.boltlayer svg{position:absolute;filter:drop-shadow(0 0 10px rgba(255,225,77,.95))}
+.stage.thunder #biri,.stage.thunder .mimg{animation:shake .09s linear 14;filter:drop-shadow(0 0 26px #fff) brightness(1.35)}
+@keyframes shake{0%{transform:translate(0,0)}25%{transform:translate(-4px,2px)}50%{transform:translate(4px,-2px)}75%{transform:translate(-3px,-3px)}100%{transform:translate(0,0)}}
+.finisher{
+  position:absolute;inset:0;display:grid;place-items:center;z-index:8;pointer-events:none;
+  font-size:34px;font-weight:900;letter-spacing:.03em;
+  color:#fff;text-shadow:0 0 14px #ffe14d,0 0 34px #ffb020,0 4px 0 #b45309;
+  opacity:0;transform:scale(.4) rotate(-8deg);
+}
+.stage.thunder .finisher{animation:fin 1.5s cubic-bezier(.2,1.6,.3,1) both}
+@keyframes fin{0%{opacity:0;transform:scale(.3) rotate(-14deg)}22%{opacity:1;transform:scale(1.14) rotate(3deg)}40%{transform:scale(1) rotate(0)}80%{opacity:1}100%{opacity:0;transform:scale(1.08)}}
+.spark{position:absolute;width:7px;height:7px;border-radius:2px;background:var(--volt);pointer-events:none;z-index:7;box-shadow:0 0 10px var(--volt)}
+.floatx{position:absolute;font-weight:900;font-size:15px;color:var(--volt);text-shadow:0 0 10px rgba(255,225,77,.8);pointer-events:none;z-index:9;animation:fx 1.1s ease-out both}
+@keyframes fx{0%{opacity:0;transform:translateY(6px) scale(.8)}20%{opacity:1}100%{opacity:0;transform:translateY(-48px) scale(1.1)}}
+
+/* gauges */
+.gauges{width:100%;display:flex;gap:9px;margin-top:11px}
+.gauge{flex:1;background:rgba(0,0,0,.3);border:1px solid var(--line);border-radius:13px;padding:8px 10px}
+.gauge .gl{font-size:10.5px;color:var(--tx2);font-weight:800;letter-spacing:.06em;display:flex;justify-content:space-between}
+.bar{height:7px;border-radius:99px;background:rgba(255,255,255,.11);margin-top:6px;overflow:hidden}
+.bar i{display:block;height:100%;border-radius:99px;transition:width .7s cubic-bezier(.2,.9,.2,1)}
+.bar.exp i{background:linear-gradient(90deg,#5eead4,#7dd3fc)}
+.bar.volt i{background:linear-gradient(90deg,#ffb020,#ffe14d);box-shadow:0 0 12px rgba(255,225,77,.7)}
+.ready{animation:pulseGold 1.3s ease-in-out infinite}
+@keyframes pulseGold{0%,100%{box-shadow:0 0 0 0 rgba(255,225,77,.5)}50%{box-shadow:0 0 0 9px rgba(255,225,77,0)}}
+
+/* ---------- input ---------- */
+.bigin{position:relative}
+.bigin input{font-size:34px;font-weight:900;letter-spacing:.02em;padding:16px 62px 16px 16px;text-align:right;border-radius:16px;background:rgba(0,0,0,.36);border:1.5px solid rgba(255,225,77,.28)}
+.bigin .unit{position:absolute;right:16px;top:50%;transform:translateY(-50%);color:var(--tx2);font-weight:800;font-size:15px}
+.bigin.warn input{border-color:var(--volt2);box-shadow:0 0 0 3px rgba(255,176,32,.16)}
+.bigin.err input{border-color:var(--rose);box-shadow:0 0 0 3px rgba(251,113,133,.18)}
+.row{display:flex;gap:9px}
+.row>*{flex:1;min-width:0}
+.btn{
+  display:flex;align-items:center;justify-content:center;gap:8px;width:100%;
+  padding:15px;border-radius:15px;font-weight:900;font-size:16px;
+  background:linear-gradient(135deg,#ffe14d,#ffb020);color:#23180a;
+  box-shadow:0 8px 24px rgba(255,176,32,.3);transition:transform .12s,filter .12s;
+}
+.btn:active{transform:scale(.975);filter:brightness(1.08)}
+.btn[disabled]{opacity:.42;box-shadow:none;filter:grayscale(.5)}
+.btn.sub{background:var(--card2);color:var(--tx);box-shadow:none;border:1px solid var(--line);font-size:14px;padding:12px}
+.btn.dgr{background:rgba(251,113,133,.16);color:#ffc2cc;border:1px solid rgba(251,113,133,.35);box-shadow:none}
+.btn.sm{padding:9px 13px;font-size:13px;width:auto;border-radius:11px}
+.pred{display:flex;align-items:baseline;justify-content:center;gap:8px;margin-top:10px;font-weight:800;min-height:26px}
+.pred .v{font-size:24px}
+.pred.g{color:var(--ok)}.pred.y{color:var(--volt)}.pred.r{color:var(--rose)}
+
+/* ---------- stats ---------- */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:15px;padding:11px 12px}
+.stat .k{font-size:10.5px;color:var(--tx2);font-weight:800;letter-spacing:.06em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stat .v{font-size:23px;font-weight:900;line-height:1.25;margin-top:1px}
+.stat .v small{font-size:11.5px;font-weight:800;color:var(--tx2);margin-left:2px}
+.stat .s{font-size:11px;color:var(--tx3);font-weight:700}
+.stat.hl{background:linear-gradient(135deg,rgba(255,225,77,.14),rgba(255,176,32,.05));border-color:rgba(255,225,77,.28)}
+.up{color:var(--rose)}.down{color:var(--ok)}
+
+.alert{border-radius:14px;padding:11px 13px;margin:10px 0;font-size:13px;font-weight:700;display:flex;gap:9px;align-items:flex-start;border:1px solid}
+.alert.w{background:rgba(255,176,32,.11);border-color:rgba(255,176,32,.34);color:#ffdb9b}
+.alert.d{background:rgba(251,113,133,.11);border-color:rgba(251,113,133,.34);color:#ffc2cc}
+.alert.i{background:rgba(125,211,252,.1);border-color:rgba(125,211,252,.3);color:#c3e9ff}
+.alert.s{background:rgba(74,222,128,.1);border-color:rgba(74,222,128,.3);color:#bbf7d0}
+.alert b{display:block;font-size:13.5px}
+
+/* ---------- chart ---------- */
+.segbar{display:flex;gap:6px;background:rgba(0,0,0,.28);border:1px solid var(--line);border-radius:12px;padding:4px}
+.segbar button{flex:1;padding:7px 4px;border-radius:9px;font-size:12.5px;font-weight:800;color:var(--tx2)}
+.segbar button.on{background:var(--card2);color:var(--tx);box-shadow:0 1px 8px rgba(0,0,0,.3)}
+.chart{width:100%;display:block;overflow:visible;touch-action:pan-y}
+.chart text{font-size:9.5px;fill:var(--tx3);font-weight:700}
+.chart .glin{stroke:rgba(255,255,255,.07)}
+.legend{display:flex;flex-wrap:wrap;gap:11px;margin-top:9px;font-size:11px;color:var(--tx2);font-weight:700}
+.legend i{display:inline-block;width:11px;height:4px;border-radius:2px;margin-right:5px;vertical-align:middle}
+.tipbox{margin-top:10px;background:rgba(0,0,0,.3);border:1px solid var(--line);border-radius:12px;padding:10px 12px;font-size:12.5px;min-height:44px}
+
+/* ---------- lists ---------- */
+.list{display:flex;flex-direction:column;gap:7px}
+.item{display:flex;align-items:center;gap:11px;background:var(--card);border:1px solid var(--line);border-radius:13px;padding:10px 12px}
+.item .d{font-size:12px;font-weight:800;color:var(--tx2);min-width:52px}
+.item .m{flex:1;min-width:0;font-size:13px}
+.item .m .sub{font-size:11px;color:var(--tx3)}
+.item .kw{font-weight:900;font-size:16px;white-space:nowrap}
+.item .x{color:var(--tx3);font-size:19px;padding:0 3px;line-height:1}
+.est{font-size:9.5px;background:rgba(167,139,250,.2);color:#d6c7ff;border-radius:5px;padding:1px 5px;margin-left:5px;font-weight:800;vertical-align:1px}
+.tag{font-size:10.5px;border-radius:7px;padding:2px 7px;font-weight:800;white-space:nowrap}
+.t-aircon{background:rgba(125,211,252,.2);color:#bfe9ff}
+.t-guest{background:rgba(251,113,133,.2);color:#ffc2cc}
+.t-defrost{background:rgba(94,234,212,.2);color:#b6f5ea}
+.t-pc{background:rgba(167,139,250,.22);color:#d6c7ff}
+.t-appliance{background:rgba(255,176,32,.2);color:#ffdb9b}
+.t-away{background:rgba(148,163,184,.22);color:#dbe3ef}
+.t-other{background:rgba(255,255,255,.13);color:#d7dcea}
+.chips{display:flex;flex-wrap:wrap;gap:7px}
+.chips button{border:1px solid var(--line);border-radius:10px;padding:7px 11px;font-size:12.5px;font-weight:800;background:rgba(0,0,0,.22);color:var(--tx2)}
+.chips button.on{background:linear-gradient(135deg,rgba(255,225,77,.24),rgba(255,176,32,.1));border-color:rgba(255,225,77,.42);color:#ffe98a}
+
+table{width:100%;border-collapse:collapse;font-size:12px}
+th,td{padding:7px 5px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+th{color:var(--tx3);font-size:10.5px;font-weight:800;letter-spacing:.04em}
+td:first-child,th:first-child{text-align:left}
+.scrollx{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -4px;padding:0 4px}
+
+/* ---------- nav ---------- */
+nav.tabs{
+  position:fixed;left:0;right:0;bottom:0;z-index:40;
+  padding:7px 10px calc(7px + var(--safe));
+  background:linear-gradient(0deg,rgba(11,13,26,.97),rgba(11,13,26,.86));
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  border-top:1px solid var(--line);
+}
+nav.tabs .in{max-width:560px;margin:0 auto;display:grid;grid-template-columns:repeat(5,1fr);gap:3px}
+nav.tabs button{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 2px;border-radius:13px;font-size:10px;font-weight:800;color:var(--tx3);transition:color .15s,background .15s}
+nav.tabs button svg{width:21px;height:21px;stroke-width:2}
+nav.tabs button.on{color:var(--volt);background:rgba(255,225,77,.09)}
+nav.tabs button.on svg{filter:drop-shadow(0 0 7px rgba(255,225,77,.65))}
+
+.toast{position:fixed;left:50%;bottom:calc(96px + var(--safe));transform:translateX(-50%) translateY(20px);z-index:120;background:rgba(20,23,40,.97);border:1px solid var(--line);border-radius:14px;padding:11px 18px;font-weight:800;font-size:13.5px;opacity:0;transition:.3s;pointer-events:none;box-shadow:0 12px 34px rgba(0,0,0,.5);max-width:88vw;text-align:center}
+.toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+.empty{text-align:center;color:var(--tx3);padding:26px 10px;font-size:13px}
+details summary{cursor:pointer;font-weight:800;font-size:13px;color:var(--tx2);padding:4px 0;list-style:none}
+details summary::-webkit-details-marker{display:none}
+details summary:before{content:"▸ ";color:var(--volt)}
+details[open] summary:before{content:"▾ "}
+</style>
+</head>
+<body>
+<div class="flash" id="flash"></div>
+
+<div id="app">
+<header class="top">
+  <div class="brand"><span class="zap">⚡</span><span>でんき日記</span></div>
+  <div class="lvchip">
+    <span class="pill lv" id="pLv">Lv.1</span>
+    <span class="pill st" id="pSt">🔥0日</span>
+  </div>
+</header>
+
+<!-- ============ HOME ============ -->
+<section class="view on" id="v-home">
+
+  <div class="stage mood-sleepy" id="stage">
+    <div class="floor"></div>
+    <div class="boltlayer" id="boltLayer"></div>
+    <div class="finisher" id="finisher">10まんワット！</div>
+    <div class="bubble" id="bubble">メーター、読んできた？</div>
+    <div class="mwrap"><button id="mascotBtn" aria-label="ビリすけをタップ"></button></div>
+    <div class="gauges">
+      <div class="gauge">
+        <div class="gl"><span>EXP</span><span id="expTx">0/120</span></div>
+        <div class="bar exp"><i id="expBar" style="width:0%"></i></div>
+      </div>
+      <div class="gauge" id="voltGauge">
+        <div class="gl"><span>ボルテージ</span><span id="voltTx">0/7</span></div>
+        <div class="bar volt"><i id="voltBar" style="width:0%"></i></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3><span class="dot"></span>きょうのメーター積算値</h3>
+    <div class="row" style="margin-bottom:9px">
+      <div style="flex:1.5"><label>日付</label><input type="date" id="inDate"></div>
+      <div><label>時刻</label><input type="time" id="inTime"></div>
+    </div>
+    <label>積算電力量</label>
+    <div class="bigin" id="biginWrap">
+      <input type="text" inputmode="decimal" id="inMeter" placeholder="0000.0" autocomplete="off">
+      <span class="unit">kWh</span>
+    </div>
+    <div class="pred" id="predLine"><span class="muted tiny">前回の値との差から自動計算します</span></div>
+    <div style="margin-top:11px"><button class="btn" id="btnSave">⚡ 記録する</button></div>
+    <div class="tiny muted" id="lastRead" style="margin-top:9px;text-align:center"></div>
+  </div>
+
+  <div id="alerts"></div>
+
+  <div class="grid2">
+    <div class="stat hl"><div class="k">きょう</div><div class="v num" id="sToday">–<small>kWh</small></div><div class="s" id="sTodaySub">未記録</div></div>
+    <div class="stat"><div class="k">7日移動平均</div><div class="v num" id="sMa">–<small>kWh/日</small></div><div class="s" id="sMaSub">データ待ち</div></div>
+    <div class="stat"><div class="k">今期の推計請求</div><div class="v num" id="sBill">–<small>円</small></div><div class="s" id="sBillSub"></div></div>
+    <div class="stat"><div class="k">前年同期比</div><div class="v num" id="sYoy">–</div><div class="s" id="sYoySub"></div></div>
+  </div>
+
+  <div class="card">
+    <h3><span class="dot"></span>目標までの距離</h3>
+    <div id="targetViz"></div>
+  </div>
+
+  <div class="card">
+    <h3><span class="dot"></span>調査メモ</h3>
+    <div class="tiny muted" id="missionBox"></div>
+  </div>
+</section>
+
+<!-- ============ CHART ============ -->
+<section class="view" id="v-chart">
+  <div class="card">
+    <h3><span class="dot"></span>日次kWh と 7日移動平均</h3>
+    <div class="segbar" id="segRange">
+      <button data-r="14" class="on">14日</button><button data-r="30">30日</button>
+      <button data-r="90">90日</button><button data-r="9999">全部</button>
+    </div>
+    <div style="margin-top:12px"><svg class="chart" id="chDaily" viewBox="0 0 340 190"></svg></div>
+    <div class="legend">
+      <span><i style="background:#7dd3fc"></i>日次</span>
+      <span><i style="background:#ffe14d"></i>7日平均</span>
+      <span><i style="background:#4ade80"></i>元の水準 <span id="lgBase"></span></span>
+      <span><i style="background:#fb7185"></i>目標 <span id="lgTgt"></span></span>
+      <span><i style="background:#a78bfa"></i>イベント日</span>
+    </div>
+    <div class="tipbox" id="tipDaily">グラフをタップすると、その日の内訳が出ます。</div>
+  </div>
+
+  <div class="card">
+    <h3><span class="dot"></span>月次 kWh/日 の推移（請求実績）</h3>
+    <div style="margin-top:4px"><svg class="chart" id="chMonthly" viewBox="0 0 340 175"></svg></div>
+    <div class="legend"><span><i style="background:#5eead4"></i>2025年</span><span><i style="background:#ffb020"></i>2026年</span><span><i style="background:#4ade80"></i>元の水準</span></div>
+    <div class="tipbox" id="tipMonthly">検針期間が28〜35日でバラつくため、月合計ではなく1日あたりで並べています。</div>
+  </div>
+
+  <div class="card">
+    <h3><span class="dot"></span>前年同月比（kWh/日）</h3>
+    <div style="margin-top:4px"><svg class="chart" id="chYoy" viewBox="0 0 340 165"></svg></div>
+    <div class="legend"><span><i style="background:#5eead4"></i>前年</span><span><i style="background:#fb7185"></i>今年</span></div>
+  </div>
+</section>
+
+<!-- ============ LOG ============ -->
+<section class="view" id="v-log">
+  <div class="segbar" id="segLog" style="margin:12px 0">
+    <button data-t="r" class="on">メーター記録</button><button data-t="e">イベント</button>
+  </div>
+
+  <div id="logR">
+    <div class="card tight">
+      <details><summary>過去分をあとから入力・修正する</summary>
+        <div style="margin-top:10px">
+          <div class="row" style="margin-bottom:9px">
+            <div style="flex:1.4"><label>日付</label><input type="date" id="bfDate"></div>
+            <div><label>時刻</label><input type="time" id="bfTime" value="21:00"></div>
+          </div>
+          <div class="row" style="align-items:flex-end">
+            <div style="flex:2"><label>積算値 kWh</label><input type="text" inputmode="decimal" id="bfMeter" placeholder="0000.0"></div>
+            <div style="flex:1"><button class="btn sub" id="bfAdd" style="padding:11px">追加</button></div>
+          </div>
+          <div class="tiny muted" style="margin-top:8px">同じ日付があれば上書きします。飛んだ日は設定の「欠測の扱い」に従って処理されます。</div>
+        </div>
+      </details>
+    </div>
+    <div class="list" id="listReadings"></div>
+  </div>
+
+  <div id="logE" style="display:none">
+    <div class="card">
+      <h3><span class="dot"></span>イベントを記録</h3>
+      <div class="row" style="margin-bottom:10px"><div><label>日付</label><input type="date" id="evDate"></div></div>
+      <label>タグ</label>
+      <div class="chips" id="evTags" style="margin-bottom:11px">
+        <button data-t="aircon" class="on">❄️ エアコン</button><button data-t="guest">👥 来客</button>
+        <button data-t="away">✈️ 外泊/不在</button><button data-t="defrost">🧊 霜取り</button>
+        <button data-t="pc">💻 PC</button><button data-t="appliance">🔌 家電</button><button data-t="other">📝 その他</button>
+      </div>
+      <label>メモ</label>
+      <input type="text" id="evDesc" placeholder="例: 来客6時間エアコン使用" style="margin-bottom:11px">
+      <button class="btn sub" id="evAdd">イベントを追加</button>
+    </div>
+    <div class="list" id="listEvents"></div>
+  </div>
+</section>
+
+<!-- ============ BILL ============ -->
+<section class="view" id="v-bill">
+  <div class="card">
+    <h3><span class="dot"></span>今期の請求推計</h3>
+    <div class="row" style="margin-bottom:11px">
+      <div><label>期間はじめ</label><input type="date" id="pStart"></div>
+      <div><label>期間おわり</label><input type="date" id="pEnd"></div>
+    </div>
+    <div id="estBox"></div>
+    <div class="hr"></div>
+    <div class="row">
+      <div><label>燃調 円/kWh</label><input type="number" step="0.01" id="fuelRate"></div>
+      <div><label>賦課金 円/kWh</label><input type="number" step="0.01" id="levyRate"></div>
+    </div>
+    <div class="tiny muted" style="margin:9px 0 7px">国の支援で燃調が下がる月のプリセット（使用量が変わらなくても請求額は下がります）。</div>
+    <div class="chips">
+      <button class="fp" data-v="2.97">通常 2.97</button>
+      <button class="fp" data-v="1.17">8月分 −1.80</button>
+      <button class="fp" data-v="0.67">9月分 −2.30</button>
+      <button class="fp" data-v="1.17">10月分 −1.80</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3><span class="dot"></span>請求実績を追加</h3>
+    <div class="row" style="margin-bottom:9px">
+      <div><label>請求月</label><input type="month" id="bMonth"></div>
+      <div><label>kWh</label><input type="number" id="bKwh"></div>
+    </div>
+    <div class="row" style="margin-bottom:9px">
+      <div><label>期間はじめ</label><input type="date" id="bStart"></div>
+      <div><label>期間おわり</label><input type="date" id="bEnd"></div>
+    </div>
+    <div class="row" style="margin-bottom:11px">
+      <div><label>請求額 円</label><input type="number" id="bAmt"></div>
+      <div><label>燃調 円</label><input type="number" step="0.01" id="bFuel"></div>
+      <div><label>賦課金 円</label><input type="number" id="bLevy"></div>
+    </div>
+    <button class="btn sub" id="bAdd">実績を追加</button>
+  </div>
+
+  <div class="card">
+    <h3><span class="dot"></span>請求実績</h3>
+    <div class="scrollx"><table id="tblBills"></table></div>
+  </div>
+
+  <div class="card">
+    <h3><span class="dot"></span>料金シミュレータ</h3>
+    <label>月間使用量 <b id="simLbl" class="num">200</b> kWh</label>
+    <input type="range" id="simRange" min="30" max="400" value="200" style="padding:0;background:none;border:none">
+    <div id="simOut" style="margin-top:9px"></div>
+  </div>
+</section>
+
+<!-- ============ SETTINGS ============ -->
+<section class="view" id="v-set">
+  <div class="card">
+    <h3><span class="dot"></span>判定の基準値</h3>
+    <div class="row" style="margin-bottom:10px">
+      <div><label>元の水準 kWh/日</label><input type="number" step="0.1" id="stBase"></div>
+      <div><label>目標 kWh/日</label><input type="number" step="0.1" id="stTgt"></div>
+    </div>
+    <div class="row">
+      <div><label>警告する7日平均</label><input type="number" step="0.1" id="stAlert"></div>
+      <div><label>前年比 警告 %</label><input type="number" step="1" id="stYoy"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3><span class="dot"></span>計算の仕方</h3>
+    <label>欠測日（読み忘れ）の扱い</label>
+    <select id="stGap" style="margin-bottom:11px">
+      <option value="prorate">日数で按分して各日に配る（推奨）</option>
+      <option value="lump">読んだ日にまとめて計上する</option>
+    </select>
+    <label style="display:flex;align-items:center;gap:9px;color:var(--tx);font-size:13.5px">
+      <input type="checkbox" id="stNorm" style="width:19px;height:19px;flex:none;padding:0">
+      読んだ時刻の差で24時間に正規化する
+    </label>
+    <div class="tiny muted" style="margin-top:7px">朝に読んだり夜に読んだりで間隔がぶれるときにON。第3段階の単価は実績がないため推定値です。</div>
+    <div class="row" style="margin-top:11px"><div><label>第3段階 円/kWh（推定）</label><input type="number" step="0.01" id="stTier3"></div></div>
+  </div>
+
+  <div class="card">
+    <h3><span class="dot"></span>マスコット</h3>
+    <div class="tiny muted" style="margin-bottom:10px">初期状態はこのアプリ用のオリジナルキャラ「ビリすけ」です。お手持ちの画像に差し替えられます（端末内にのみ保存、外部送信なし）。</div>
+    <div class="row" style="align-items:center">
+      <div><button class="btn sub" id="btnPic">画像を選ぶ</button></div>
+      <div><button class="btn sub" id="btnPicClear">ビリすけに戻す</button></div>
+    </div>
+    <input type="file" id="filePic" accept="image/*" style="display:none">
+    <div class="hr"></div>
+    <label>名前</label><input type="text" id="stName" maxlength="12">
+  </div>
+
+  <div class="card">
+    <h3><span class="dot"></span>データ</h3>
+    <div class="grid2" style="gap:9px">
+      <button class="btn sub" id="exR">記録CSV</button>
+      <button class="btn sub" id="exE">イベントCSV</button>
+      <button class="btn sub" id="exB">請求CSV</button>
+      <button class="btn sub" id="exJ">全部バックアップ</button>
+    </div>
+    <div style="margin-top:9px"><button class="btn sub" id="imJ">バックアップから復元</button></div>
+    <input type="file" id="fileJ" accept="application/json,.json" style="display:none">
+    <div class="hr"></div>
+    <button class="btn dgr" id="btnReset">すべて消去して初期化</button>
+    <div class="tiny muted" style="margin-top:9px">データはこの端末のブラウザ内（localStorage）だけに保存されます。機種変更やブラウザのデータ削除で消えるので、ときどきバックアップを取ってください。</div>
+  </div>
+
+  <div class="card">
+    <h3><span class="dot"></span>このアプリについて</h3>
+    <div class="tiny muted">
+      自宅の電気使用量が 4.2kWh/日（2025年前半）→ 8.1kWh/日（2026年6月）に倍増した原因を追うための日次記録ツール。契約はKABU&でんき（関西電力 従量電灯A 相当）。<br><br>
+      効果判定は必ず <b style="color:var(--volt)">kWh/日</b> で行うこと。検針期間が28〜35日でバラつくうえ、2026年8〜10月分は国の支援で燃調が下がるため、金額で見ると誤認します。<br><br>
+      <span id="verTx"></span>
+    </div>
+  </div>
+</section>
+</div>
+
+<nav class="tabs"><div class="in">
+  <button data-v="home" class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>ホーム</button>
+  <button data-v="chart"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/></svg>グラフ</button>
+  <button data-v="log"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z"/><path d="M8 9h8M8 13h8M8 17h5"/></svg>記録</button>
+  <button data-v="bill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h12v20l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg>請求</button>
+  <button data-v="set"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2V21a2 2 0 1 1-4 0v-.1A1.7 1.7 0 0 0 7 19.4a1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.7 1.7 0 0 0 3 14a2 2 0 1 1 0-4 1.7 1.7 0 0 0 1.5-2.6l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.7 1.7 0 0 0 10 3a2 2 0 1 1 4 0 1.7 1.7 0 0 0 2.6 1.5l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1A1.7 1.7 0 0 0 21 10a2 2 0 1 1 0 4 1.7 1.7 0 0 0-1.6 1z"/></svg>設定</button>
+</div></nav>
+
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+/* ==================================================================
+   でんき日記 ⚡  single-file app
+   data: localStorage only. no network.
+================================================================== */
+const VER="1.0.0 / 2026-08-11";
+const KEY="denki-nikki-v1";
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+
+/* ---------- date helpers ---------- */
+const p2=n=>String(n).padStart(2,"0");
+const D={
+  fmt:d=>`${d.getFullYear()}-${p2(d.getMonth()+1)}-${p2(d.getDate())}`,
+  today:()=>D.fmt(new Date()),
+  now:()=>{const d=new Date();return `${p2(d.getHours())}:${p2(d.getMinutes())}`},
+  parse:s=>{const[y,m,d]=s.split("-").map(Number);return new Date(y,m-1,d)},
+  add:(s,n)=>{const d=D.parse(s);d.setDate(d.getDate()+n);return D.fmt(d)},
+  diff:(a,b)=>Math.round((D.parse(b)-D.parse(a))/864e5),
+  md:s=>{const[,m,d]=s.split("-");return `${+m}/${+d}`},
+  ym:s=>s.slice(0,7),
+  wd:s=>"日月火水木金土"[D.parse(s).getDay()],
+};
+const hoursBetween=(a,b)=>{
+  const t=s=>{const[h,m]=(s||"21:00").split(":").map(Number);return h*60+m};
+  return (D.diff(a.date,b.date)*1440 + t(b.time)-t(a.time))/60;
+};
+
+/* ---------- seed bills ---------- */
+const SEED_BILLS=[
+["2025-01","2025-01-12","2025-01-23",12,51,1499,188.67,177],
+["2025-02","2025-01-24","2025-02-20",28,117,3132,141.61,408],
+["2025-03","2025-02-21","2025-03-24",32,133,3621,180.90,464],
+["2025-04","2025-03-25","2025-04-21",28,127,3616,350.51,443],
+["2025-05","2025-04-22","2025-05-22",31,140,4266,554.40,557],
+["2025-06","2025-05-23","2025-06-19",28,136,4108,514.06,541],
+["2025-07","2025-06-20","2025-07-21",32,177,5395,589.46,704],
+["2025-08","2025-07-22","2025-08-24",34,237,6817,237.05,943],
+["2025-09","2025-08-25","2025-09-21",28,203,5649,75.14,807],
+["2025-10","2025-09-22","2025-10-21",30,204,5734,130.56,811],
+["2025-11","2025-10-22","2025-11-20",30,178,5302,466.41,708],
+["2025-12","2025-11-21","2025-12-18",28,173,5139,451.49,688],
+["2026-01","2025-12-19","2026-01-22",35,229,6941,597.65,911],
+["2026-02","2026-01-23","2026-02-19",28,205,5242,-391.54,815],
+["2026-03","2026-02-20","2026-03-23",32,200,5128,-358.06,796],
+["2026-04","2026-03-24","2026-04-20",28,187,5354,252.52,744],
+["2026-05","2026-04-21","2026-05-24",34,256,7936,742.46,1070],
+["2026-06","2026-05-25","2026-06-21",28,227,7003,674.19,948],
+].map(r=>({month:r[0],start:r[1],end:r[2],days:r[3],kwh:r[4],amount:r[5],fuel:r[6],levy:r[7]}));
+
+const DEFAULTS={
+  readings:[], events:[], bills:SEED_BILLS,
+  settings:{gap:"prorate",norm:false,base:4.2,target:6.8,alertMa:8.5,alertYoy:30,
+    tier3:28.86,fuel:2.97,levy:4.18,pStart:"2026-07-22",pEnd:"2026-08-24",name:"ビリすけ",pic:null},
+  mascot:{exp:0,lastLog:null,streak:0,best:0,total:0,volt:0,thunders:0}
+};
+
+/* ---------- state ---------- */
+let S;
+function load(){
+  try{
+    const raw=localStorage.getItem(KEY);
+    S = raw ? deepMerge(structuredClone(DEFAULTS), JSON.parse(raw)) : structuredClone(DEFAULTS);
+  }catch(e){ S=structuredClone(DEFAULTS) }
+  if(!S.bills||!S.bills.length) S.bills=structuredClone(SEED_BILLS);
+}
+function deepMerge(base,over){
+  for(const k in over){
+    if(over[k] && typeof over[k]==="object" && !Array.isArray(over[k]) && base[k]) deepMerge(base[k],over[k]);
+    else base[k]=over[k];
+  }
+  return base;
+}
+function save(){ try{ localStorage.setItem(KEY,JSON.stringify(S)) }catch(e){ toast("保存に失敗しました（容量超過かも）") } }
+
+/* ---------- tariff (KABU&でんき / 関電 従量電灯A 相当) ---------- */
+function energyCharge(kwh,tier3){
+  if(kwh<=0) return 0;
+  if(kwh<=15) return 522.58;
+  if(kwh<=120) return 522.58 + (kwh-15)*20.20;
+  if(kwh<=300) return 522.58 + 2121.00 + (kwh-120)*25.59;
+  return 522.58 + 2121.00 + 180*25.59 + (kwh-300)*tier3;
+}
+function billTotal(kwh,fuelRate,levyRate,tier3){
+  return Math.floor(energyCharge(kwh,tier3) + kwh*fuelRate + Math.floor(kwh*levyRate));
+}
+
+/* ---------- derived daily series ---------- */
+function series(){
+  const rs=[...S.readings].sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:0);
+  const m=new Map();
+  for(let i=1;i<rs.length;i++){
+    const a=rs[i-1],b=rs[i];
+    const days=D.diff(a.date,b.date);
+    if(days<=0) continue;
+    const delta=+(b.meter-a.meter).toFixed(3);
+    let per=delta/days;
+    if(S.settings.norm){ const h=hoursBetween(a,b); if(h>1) per=delta/(h/24); }
+    if(days===1){
+      m.set(b.date,{v:per,raw:delta,est:false,span:1});
+    }else if(S.settings.gap==="prorate"){
+      for(let k=1;k<=days;k++) m.set(D.add(a.date,k),{v:per,raw:per,est:true,span:days});
+    }else{
+      m.set(b.date,{v:per,raw:delta,est:false,span:days,lump:true});
+    }
+  }
+  return m;
+}
+function sortedDates(m){ return [...m.keys()].sort() }
+function ma7(m,date){
+  let s=0,c=0;
+  for(let i=0;i<7;i++){const d=m.get(D.add(date,-i)); if(d){s+=d.v;c++}}
+  return c>=3 ? s/c : null;
+}
+function streakOf(){
+  const set=new Set(S.readings.map(r=>r.date));
+  let d=D.today();
+  if(!set.has(d)) d=D.add(d,-1);
+  if(!set.has(d)) return 0;
+  let n=0; while(set.has(d)){n++;d=D.add(d,-1)}
+  return n;
+}
+const lvOf=e=>Math.floor(e/120)+1;
+
+/* prior-year kWh/day for a given date, from bills */
+function lastYearPerDay(date){
+  const t=D.add(date,-364);
+  const b=S.bills.find(b=>b.start<=t&&t<=b.end);
+  return b?b.kwh/b.days:null;
+}
+function billCovering(date){ return S.bills.find(b=>b.start<=date&&date<=b.end) }
+
+/* ==================================================================
+   MASCOT
+================================================================== */
+const BIRI_SVG=`<svg id="biri" viewBox="0 0 220 214" xmlns="http://www.w3.org/2000/svg">
+<defs>
+ <radialGradient id="gG" cx="36%" cy="30%" r="78%">
+  <stop offset="0%" stop-color="#fffdf0"/><stop offset="42%" stop-color="#ffe766"/><stop offset="100%" stop-color="#f0a300"/>
+ </radialGradient>
+ <linearGradient id="bG" x1="0" y1="0" x2="0" y2="1">
+  <stop offset="0" stop-color="#dfe6f2"/><stop offset=".5" stop-color="#9aa5b8"/><stop offset="1" stop-color="#6c7789"/>
+ </linearGradient>
+ <linearGradient id="aG" x1="0" y1="0" x2="0" y2="1">
+  <stop offset="0" stop-color="#fff6b0"/><stop offset="1" stop-color="#ffc21f"/>
+ </linearGradient>
+</defs>
+<!-- cord + plug -->
+<path d="M150 178 C 190 184 202 156 186 136" fill="none" stroke="#3c4454" stroke-width="7" stroke-linecap="round"/>
+<g transform="translate(184,128) rotate(-14)">
+ <rect x="-12" y="-15" width="24" height="19" rx="6" fill="#e8edf5"/>
+ <rect x="-7.5" y="-24" width="4.5" height="10" rx="2.2" fill="#8b95a7"/>
+ <rect x="3" y="-24" width="4.5" height="10" rx="2.2" fill="#8b95a7"/>
+</g>
+<!-- antenna -->
+<g class="ant"><path d="M104 6 L84 44 L99 44 L90 76 L124 36 L108 36 L120 6 Z" fill="url(#aG)" stroke="#e08c00" stroke-width="2.4" stroke-linejoin="round"/></g>
+<!-- feet -->
+<ellipse cx="92" cy="200" rx="15" ry="9" fill="#f0a300"/><ellipse cx="132" cy="200" rx="15" ry="9" fill="#f0a300"/>
+<!-- base -->
+<path d="M78 156 L146 156 L141 186 Q141 193 133 193 L91 193 Q83 193 83 186 Z" fill="url(#bG)"/>
+<path d="M78 156 L146 156 L145 163 L79 163 Z" fill="#c3ccdb"/>
+<path d="M80 170 H144 M81.5 178 H142.5" stroke="rgba(0,0,0,.20)" stroke-width="2.6" stroke-linecap="round"/>
+<!-- glass -->
+<path d="M112 42 C 145 42 168 68 168 100 C 168 124 154 141 148 157 L 76 157 C 70 141 56 124 56 100 C 56 68 79 42 112 42 Z" fill="url(#gG)"/>
+<path d="M78 76 C 84 62 96 54 106 52" stroke="rgba(255,255,255,.75)" stroke-width="9" stroke-linecap="round" fill="none" opacity=".8"/>
+<!-- arms -->
+<path d="M58 118 q-13 8 -10 20" stroke="#f0a300" stroke-width="10" stroke-linecap="round" fill="none"/>
+<path d="M166 118 q13 8 10 20" stroke="#f0a300" stroke-width="10" stroke-linecap="round" fill="none"/>
+<!-- cheeks -->
+<g opacity=".92">
+ <ellipse cx="74" cy="118" rx="12" ry="8.5" fill="#ff8a3d"/><ellipse cx="150" cy="118" rx="12" ry="8.5" fill="#ff8a3d"/>
+ <path d="M70 116 l4 -4 l-1 4 l4 -1 l-5 5 l1 -4 z" fill="#fff" opacity=".85"/>
+ <path d="M146 116 l4 -4 l-1 4 l4 -1 l-5 5 l1 -4 z" fill="#fff" opacity=".85"/>
+</g>
+<!-- eyes -->
+<g class="eyes-open blink" style="transform-origin:112px 98px">
+ <ellipse cx="94" cy="98" rx="11.5" ry="13" fill="#33240c"/><ellipse cx="130" cy="98" rx="11.5" ry="13" fill="#33240c"/>
+ <circle cx="90" cy="93" r="4.4" fill="#fff"/><circle cx="126" cy="93" r="4.4" fill="#fff"/>
+ <circle cx="97" cy="104" r="2" fill="#fff" opacity=".7"/><circle cx="133" cy="104" r="2" fill="#fff" opacity=".7"/>
+</g>
+<g class="eyes-happy">
+ <path d="M83 102 q11 -15 22 0" stroke="#33240c" stroke-width="5.5" fill="none" stroke-linecap="round"/>
+ <path d="M119 102 q11 -15 22 0" stroke="#33240c" stroke-width="5.5" fill="none" stroke-linecap="round"/>
+</g>
+<g class="eyes-sleep">
+ <path d="M84 99 q10 9 21 0" stroke="#33240c" stroke-width="5" fill="none" stroke-linecap="round"/>
+ <path d="M120 99 q10 9 21 0" stroke="#33240c" stroke-width="5" fill="none" stroke-linecap="round"/>
+</g>
+<g class="eyes-worry">
+ <ellipse cx="94" cy="100" rx="10" ry="11" fill="#33240c"/><ellipse cx="130" cy="100" rx="10" ry="11" fill="#33240c"/>
+ <circle cx="91" cy="96" r="3.6" fill="#fff"/><circle cx="127" cy="96" r="3.6" fill="#fff"/>
+ <path d="M82 82 q11 -6 22 -1" stroke="#8a6a2a" stroke-width="4" fill="none" stroke-linecap="round"/>
+ <path d="M142 82 q-11 -6 -22 -1" stroke="#8a6a2a" stroke-width="4" fill="none" stroke-linecap="round"/>
+</g>
+<!-- mouths -->
+<path class="mouth-n" d="M103 124 q9 9 18 0" stroke="#33240c" stroke-width="4.6" fill="none" stroke-linecap="round"/>
+<g class="mouth-h"><path d="M97 122 q15 20 30 0 q-15 7 -30 0 z" fill="#33240c"/><path d="M108 134 q4 -5 9 -2 q-3 5 -9 2z" fill="#ff7a8a"/></g>
+<ellipse class="mouth-s" cx="112" cy="128" rx="6" ry="7.5" fill="#33240c"/>
+<path class="mouth-w" d="M102 132 q10 -9 20 0" stroke="#33240c" stroke-width="4.6" fill="none" stroke-linecap="round"/>
+<!-- extras -->
+<g class="zzz" fill="#cfe3ff" opacity=".95" font-family="system-ui" font-weight="900">
+ <text x="168" y="60" font-size="17">z</text><text x="182" y="42" font-size="22">z</text><text x="199" y="22" font-size="27">Z</text>
+</g>
+<g class="sweat"><path d="M156 74 q7 11 0 15 q-7 -4 0 -15z" fill="#7dd3fc" opacity=".9"/></g>
+</svg>`;
+
+function renderMascot(){
+  const b=$("#mascotBtn");
+  b.innerHTML = S.settings.pic
+    ? `<img class="mimg" src="${S.settings.pic}" alt="マスコット">`
+    : BIRI_SVG;
+}
+
+const LINES={
+  sleepy:["きょうのメーター、まだ読んでないよ","おなかすいた…数字ちょうだい","記録すると元気が出るんだ"],
+  normal:["きょうも記録できたね！","データが増えるとうれしい","このまま毎日つづけよう"],
+  happy:["いい感じ！平均より少ないよ","おっ、節電できてる〜","その調子その調子！"],
+  thunder:["目標クリアーッ！！","電気があまってる！ビリビリ！","やったー！技だしていい？"],
+  worry:["きょう、ちょっと多いかも…","なにか点けっぱなしじゃない？","冷凍庫の霜、だいじょうぶ？"],
+};
+function moodNow(){
+  const m=series(), t=D.today();
+  const hasToday=S.readings.some(r=>r.date===t);
+  if(!hasToday) return "sleepy";
+  const d=m.get(t)||m.get(D.add(t,-1));
+  if(!d) return "normal";
+  if(d.v<=S.settings.target) return "thunder";
+  const a=ma7(m,t);
+  if(a&&d.v<a*0.97) return "happy";
+  if(a&&d.v>a*1.22) return "worry";
+  return "normal";
+}
+function paintMascot(){
+  const mood=moodNow();
+  const st=$("#stage");
+  st.className="stage mood-"+mood;
+  const lines=LINES[mood];
+  $("#bubble").textContent=lines[Math.floor((S.mascot.total+S.mascot.exp)%lines.length)];
+  const lv=lvOf(S.mascot.exp), into=S.mascot.exp%120;
+  $("#pLv").textContent="Lv."+lv;
+  $("#pSt").textContent="🔥"+S.mascot.streak+"日";
+  $("#expTx").textContent=into+"/120";
+  $("#expBar").style.width=(into/120*100)+"%";
+  const v=Math.min(7,S.mascot.volt);
+  $("#voltTx").textContent=v+"/7";
+  $("#voltBar").style.width=(v/7*100)+"%";
+  $("#voltGauge").classList.toggle("ready",v>=7);
+}
+
+function sparkBurst(n=14){
+  const st=$("#stage"), r=st.getBoundingClientRect();
+  for(let i=0;i<n;i++){
+    const s=document.createElement("i");
+    s.className="spark";
+    const ang=(Math.PI*2*i)/n + (i*0.37);
+    const dist=48+((i*37)%70);
+    s.style.left=(r.width/2-3)+"px"; s.style.top=(r.height*0.55)+"px";
+    s.style.background=i%3===0?"#7dd3fc":i%3===1?"#ffe14d":"#fff";
+    st.appendChild(s);
+    s.animate([{transform:"translate(0,0) scale(1)",opacity:1},
+      {transform:`translate(${Math.cos(ang)*dist}px,${Math.sin(ang)*dist-18}px) scale(0)`,opacity:0}],
+      {duration:680+((i*53)%400),easing:"cubic-bezier(.2,.8,.3,1)"}).onfinish=()=>s.remove();
+  }
+}
+function floatText(txt,color){
+  const st=$("#stage"), el=document.createElement("div");
+  el.className="floatx"; el.textContent=txt;
+  if(color) el.style.color=color;
+  el.style.left="50%"; el.style.top="46%"; el.style.transform="translateX(-50%)";
+  st.appendChild(el); setTimeout(()=>el.remove(),1150);
+}
+function hop(){ const st=$("#stage"); st.classList.add("pop"); sparkBurst(12); setTimeout(()=>st.classList.remove("pop"),1300) }
+
+const BOLT='<svg viewBox="0 0 40 120" width="40" height="120"><path d="M26 0 L6 56 h14 l-8 64 30-72 h-16 z" fill="#ffe14d" stroke="#fff" stroke-width="2.5" stroke-linejoin="round"/></svg>';
+function thunder(){
+  const st=$("#stage"), L=$("#boltLayer");
+  L.innerHTML="";
+  const W=st.clientWidth||330;
+  for(let i=0;i<7;i++){
+    const w=document.createElement("div");
+    w.innerHTML=BOLT;
+    const sv=w.firstChild;
+    sv.style.left=(8+(i*(W-56)/6))+"px";
+    sv.style.top="-30px";
+    sv.style.transform=`scale(${0.55+((i*13)%40)/100}) rotate(${(i%2?1:-1)*7}deg)`;
+    L.appendChild(sv);
+    sv.animate([{opacity:0,transform:sv.style.transform+" translateY(-40px)"},
+      {opacity:1,offset:.18},{opacity:.25,offset:.4},{opacity:1,offset:.58},
+      {opacity:0,transform:sv.style.transform+" translateY(30px)"}],
+      {duration:1250,delay:i*55,easing:"steps(9,end)"});
+  }
+  st.classList.add("thunder");
+  const f=$("#flash");
+  f.animate([{opacity:0},{opacity:.85,offset:.06},{opacity:0,offset:.16},{opacity:.6,offset:.26},{opacity:0}],
+    {duration:1000,easing:"ease-out"});
+  if(navigator.vibrate) try{navigator.vibrate([28,45,28,45,90])}catch(e){}
+  sparkBurst(24);
+  setTimeout(()=>sparkBurst(20),420);
+  setTimeout(()=>{st.classList.remove("thunder");L.innerHTML="";paintMascot()},1700);
+}
+
+/* ==================================================================
+   SAVE A READING
+================================================================== */
+function upsertReading(date,time,meter,quiet){
+  const prev=[...S.readings].filter(r=>r.date<date).sort((a,b)=>a.date<b.date?-1:1).pop();
+  const isNew=!S.readings.some(r=>r.date===date);
+  S.readings=S.readings.filter(r=>r.date!==date);
+  S.readings.push({date,time,meter});
+  S.readings.sort((a,b)=>a.date<b.date?-1:1);
+
+  let fired=false;
+  if(isNew){
+    const st=streakOf();
+    S.mascot.streak=st; S.mascot.best=Math.max(S.mascot.best,st);
+    S.mascot.total++;
+    const gain=10+Math.min(st,10)*2;
+    const before=lvOf(S.mascot.exp);
+    S.mascot.exp+=gain;
+    S.mascot.volt=Math.min(7,S.mascot.volt+1);
+    S.mascot.lastLog=date;
+    save();
+    if(!quiet){
+      renderAll();
+      const m=series(), d=m.get(date);
+      const beat = d && d.v<=S.settings.target;
+      if(beat||S.mascot.volt>=7){
+        S.mascot.volt=0; S.mascot.thunders++; save();
+        thunder(); fired=true;
+        setTimeout(()=>{floatText("+"+gain+" EXP");paintMascot()},1500);
+      }else{
+        hop(); floatText("+"+gain+" EXP");
+      }
+      if(lvOf(S.mascot.exp)>before) setTimeout(()=>{floatText("LEVEL UP!","#5eead4");sparkBurst(18)},fired?1900:700);
+      toast(beat?"目標クリア！ "+S.settings.name+"が10まんワットを放った":"記録しました（"+st+"日連続）");
+    }
+  }else{
+    save(); if(!quiet){renderAll();toast("上書きしました")}
+  }
+  return fired;
+}
+
+/* ==================================================================
+   HOME
+================================================================== */
+function livePredict(){
+  const w=$("#biginWrap"), p=$("#predLine");
+  const v=parseFloat($("#inMeter").value);
+  const date=$("#inDate").value||D.today();
+  w.classList.remove("warn","err");
+  if(isNaN(v)){ p.className="pred"; p.innerHTML='<span class="muted tiny">前回の値との差から自動計算します</span>'; return }
+  const prev=[...S.readings].filter(r=>r.date<date).sort((a,b)=>a.date<b.date?-1:1).pop();
+  if(!prev){ p.className="pred"; p.innerHTML='<span class="tiny muted">最初の1件です。あすから日次が出ます</span>'; return }
+  const days=Math.max(1,D.diff(prev.date,date));
+  const delta=v-prev.meter, per=delta/days;
+  if(delta<0){ w.classList.add("err"); p.className="pred r";
+    p.innerHTML=`⚠️ 前回(${prev.meter})より小さい値です。桁の読み違いかも`; return }
+  const m=series(), a=ma7(m,D.add(date,-1))||S.settings.target;
+  const cls = per>a*3||per>30 ? "r" : per>a*1.3 ? "y" : per<=S.settings.target ? "g" : "";
+  if(cls==="r") w.classList.add("err"); else if(cls==="y") w.classList.add("warn");
+  p.className="pred "+cls;
+  const warnTx = per>a*3||per>30 ? " ← 異常値かも。桁を確認" : per<=S.settings.target ? " 🎉 目標クリア" : "";
+  p.innerHTML=`<span class="muted tiny">${days>1?days+"日分 / ":""}この日は</span><span class="v num">${per.toFixed(2)}</span><span class="tiny">kWh/日${warnTx}</span>`;
+}
+
+function renderHome(){
+  const m=series(), t=D.today(), dates=sortedDates(m);
+  const last=[...S.readings].sort((a,b)=>a.date<b.date?-1:1).pop();
+  $("#lastRead").innerHTML = last
+    ? `前回：${D.md(last.date)}(${D.wd(last.date)}) ${last.time} → <b class="num">${last.meter}</b> kWh`
+    : "まだ記録がありません。メーターの積算値を1件入れると翌日から日次が出ます。";
+
+  const td=m.get(t)||null;
+  $("#sToday").innerHTML = td?`${td.v.toFixed(2)}<small>kWh</small>`:`–<small>kWh</small>`;
+  $("#sTodaySub").textContent = td?(td.est?"按分による推定":"実測"):(S.readings.some(r=>r.date===t)?"あす計算されます":"未記録");
+
+  const a=ma7(m,dates.length?dates[dates.length-1]:t);
+  $("#sMa").innerHTML = a?`${a.toFixed(2)}<small>kWh/日</small>`:`–<small>kWh/日</small>`;
+  if(a){
+    const dif=a-S.settings.base;
+    $("#sMaSub").innerHTML=`元の水準 ${S.settings.base} より <b class="${dif>0?"up":"down"}">${dif>0?"+":""}${dif.toFixed(2)}</b>`;
+  }else $("#sMaSub").textContent=(dates.length?dates.length:0)+"日分 / 3日で算出";
+
+  /* period estimate */
+  const est=estimatePeriod();
+  $("#sBill").innerHTML = est.amount!=null?`${est.amount.toLocaleString()}<small>円</small>`:`–<small>円</small>`;
+  $("#sBillSub").textContent = est.amount!=null?`${est.kwh.toFixed(0)}kWh / ${est.days}日 (実測${est.measured}日)`:"日次データ待ち";
+
+  /* yoy */
+  const ref=dates.length?dates[dates.length-1]:t;
+  const ly=lastYearPerDay(ref), cur=ma7(m,ref);
+  if(ly&&cur){
+    const pct=(cur/ly-1)*100;
+    $("#sYoy").innerHTML=`<span class="${pct>0?"up":"down"}">${pct>0?"+":""}${pct.toFixed(0)}%</span>`;
+    $("#sYoySub").textContent=`前年同期 ${ly.toFixed(2)} → ${cur.toFixed(2)}`;
+  }else{ $("#sYoy").textContent="–"; $("#sYoySub").textContent="日次データ待ち" }
+
+  renderAlerts(m,dates);
+  renderTarget(m,dates);
+  renderMission();
+  paintMascot();
+}
+
+function renderAlerts(m,dates){
+  const box=$("#alerts"); box.innerHTML="";
+  const add=(c,b,t)=>box.insertAdjacentHTML("beforeend",`<div class="alert ${c}"><div><b>${b}</b>${t?`<span class="tiny">${t}</span>`:""}</div></div>`);
+  const ref=dates.length?dates[dates.length-1]:null;
+  const a=ref?ma7(m,ref):null;
+
+  if(!S.readings.length){
+    add("i","まずは1件、メーターを読んでみよう","スマートメーターの液晶に出る「積算電力量」を入力します。2件目からその日の使用量が自動で出ます。");
+  }
+  if(a!=null&&a>S.settings.alertMa) add("d",`7日平均が ${a.toFixed(2)} kWh/日`,`しきい値 ${S.settings.alertMa} を超えています。冷凍庫の霜、PCの稼働、点けっぱなしを確認。`);
+  if(a!=null){
+    const ly=lastYearPerDay(ref);
+    if(ly&&(a/ly-1)*100>S.settings.alertYoy) add("w",`前年同期より +${((a/ly-1)*100).toFixed(0)}%`,`前年 ${ly.toFixed(2)} → 現在 ${a.toFixed(2)} kWh/日。`);
+    if(a<=S.settings.target) add("s",`7日平均 ${a.toFixed(2)} kWh/日 — 目標圏内`,`対策後の想定 ${S.settings.target} kWh/日 を達成しています。`);
+  }
+  const t=D.today();
+  if(S.readings.length&&!S.readings.some(r=>r.date===t)) add("w","きょうのメーターが未入力","毎日ほぼ同じ時刻に読むと、日次のブレが小さくなります。");
+  const miss=missedDays();
+  if(miss>0) add("w",`${miss}日ぶん読み忘れています`,S.settings.gap==="prorate"?"日数で按分して各日に配っています（紫のタグが推定日）。":"読んだ日にまとめて計上しています。");
+}
+function missedDays(){
+  if(S.readings.length<2) return 0;
+  const rs=[...S.readings].sort((a,b)=>a.date<b.date?-1:1);
+  let n=0;
+  for(let i=1;i<rs.length;i++) n+=D.diff(rs[i-1].date,rs[i].date)-1;
+  const lastD=rs[rs.length-1].date;
+  n+=Math.max(0,D.diff(lastD,D.today())-1);
+  return n;
+}
+
+function renderTarget(m,dates){
+  const a=dates.length?ma7(m,dates[dates.length-1]):null;
+  const base=S.settings.base, tgt=S.settings.target, peak=8.11;
+  const cur=a??peak;
+  const lo=Math.min(base,cur)-0.4, hi=Math.max(peak,cur)+0.4;
+  const px=v=>((v-lo)/(hi-lo))*100;
+  const mark=(v,c,l,up)=>`<div style="position:absolute;left:${px(v)}%;top:${up?-2:26}px;transform:translateX(-50%);text-align:center;white-space:nowrap">
+      <div style="font-size:10px;font-weight:800;color:${c}">${l}</div>
+      <div style="width:2px;height:${up?12:10}px;background:${c};margin:2px auto 0;border-radius:2px;${up?"":"order:-1"}"></div></div>`;
+  $("#targetViz").innerHTML=`
+   <div style="position:relative;height:74px;margin:8px 4px 0">
+     <div style="position:absolute;top:22px;left:0;right:0;height:10px;border-radius:99px;background:linear-gradient(90deg,#4ade80,#ffe14d 45%,#fb7185)"></div>
+     <div style="position:absolute;top:16px;left:${px(cur)}%;transform:translateX(-50%);width:22px;height:22px;border-radius:99px;background:#fff;border:4px solid #ffb020;box-shadow:0 0 16px rgba(255,176,32,.85)"></div>
+     ${mark(base,"#4ade80","元 "+base,true)}
+     ${mark(tgt,"#fb7185","目標 "+tgt,true)}
+     ${mark(peak,"#9aa3bd","2026/6 8.11",false)}
+     <div style="position:absolute;top:48px;left:${px(cur)}%;transform:translateX(-50%);font-size:12px;font-weight:900;color:#ffe14d;white-space:nowrap">現在 ${cur.toFixed(2)}</div>
+   </div>
+   <div class="tiny muted" style="margin-top:10px">${a?
+      (a<=tgt?"目標圏内。この水準を維持できれば同条件比で月1,000〜1,300円の削減。":
+       `目標まであと <b style="color:var(--volt)">${(a-tgt).toFixed(2)}</b> kWh/日、元の水準まで <b>${(a-base).toFixed(2)}</b> kWh/日。`)
+      :"7日平均が出ると現在地が表示されます（表示中は2026年6月の実績値）。"}</div>`;
+}
+
+function renderMission(){
+  const t=D.today();
+  const items=[
+    ["2026-09-07","サブ冷凍庫の霜の再発チェック","厚さ5mm超までの期間で判定。3か月以上→正常 / 2〜4週→パッキン / 1〜2週→機械の異常"],
+    ["2026-09-21","2026年9月分の検針（本命の判定）","9.3kWh/日以下なら霜取り成功、10.5前後なら効果なし"],
+  ];
+  const rows=items.map(([d,ttl,sub])=>{
+    const n=D.diff(t,d);
+    const c=n<0?"var(--tx3)":n<=7?"var(--rose)":"var(--volt)";
+    return `<div style="display:flex;gap:10px;padding:7px 0;border-bottom:1px solid var(--line)">
+      <div style="min-width:56px;text-align:center"><div style="font-size:16px;font-weight:900;color:${c}" class="num">${n<0?"済":n===0?"今日":n}</div><div style="font-size:9px;color:var(--tx3)">${n>0?"日後":""}</div></div>
+      <div><div style="font-size:12.5px;font-weight:800;color:var(--tx)">${ttl}</div><div class="tiny" style="color:var(--tx3)">${sub}</div></div></div>`;
+  }).join("");
+  $("#missionBox").innerHTML=rows+`<div class="tiny" style="margin-top:9px;color:var(--tx3)">
+    容疑者：①サブ冷凍庫 simplus SP-32LF1-SL の霜（+72kWh/月・最有力） ②常時稼働PC2台化（+32kWh/月・確定）。
+    メイン冷蔵庫 日立 R-S27AMV-1 はシロ確定。未解明が約30kWh/月 残っています。</div>`;
+}
+
+/* ==================================================================
+   PERIOD ESTIMATE
+================================================================== */
+function estimatePeriod(){
+  const st=S.settings.pStart, en=S.settings.pEnd;
+  const days=D.diff(st,en)+1;
+  const m=series();
+  let sum=0,n=0;
+  for(let d=st; d<=en; d=D.add(d,1)){ const x=m.get(d); if(x){sum+=x.v;n++} }
+  if(!n) return {days,measured:0,kwh:null,amount:null,avg:null};
+  const avg=sum/n;
+  const kwh=sum+avg*(days-n);
+  const amount=billTotal(kwh,+S.settings.fuel,+S.settings.levy,+S.settings.tier3);
+  return {days,measured:n,kwh,amount,avg,sum};
+}
+function renderBillView(){
+  $("#pStart").value=S.settings.pStart; $("#pEnd").value=S.settings.pEnd;
+  $("#fuelRate").value=S.settings.fuel; $("#levyRate").value=S.settings.levy;
+
+  const e=estimatePeriod(), box=$("#estBox");
+  if(e.kwh==null){
+    box.innerHTML=`<div class="empty">この期間の日次データがまだありません。<br>メーターを記録すると推計が出ます。</div>
+      <div class="tiny muted">期間：${D.md(e.days?S.settings.pStart:"")}〜${D.md(S.settings.pEnd)}（${e.days}日）</div>`;
+  }else{
+    const ly=(()=>{ const t=D.add(S.settings.pStart,-364);
+      let b=S.bills.find(b=>b.start<=t&&t<=b.end);
+      if(!b){ let best=null,bd=1e9; S.bills.forEach(x=>{const d=Math.abs(D.diff(x.start,t)); if(d<bd){bd=d;best=x}}); b=bd<20?best:null }
+      return b; })();
+    const pct=ly?((e.kwh/e.days)/(ly.kwh/ly.days)-1)*100:null;
+    box.innerHTML=`
+     <div class="grid3" style="margin-bottom:10px">
+       <div class="stat"><div class="k">推計 kWh</div><div class="v num">${e.kwh.toFixed(0)}</div><div class="s">${e.days}日</div></div>
+       <div class="stat hl"><div class="k">推計 請求額</div><div class="v num">${e.amount.toLocaleString()}<small>円</small></div><div class="s">実測${e.measured}日</div></div>
+       <div class="stat"><div class="k">平均</div><div class="v num">${e.avg.toFixed(2)}</div><div class="s">kWh/日</div></div>
+     </div>
+     <div class="bar" style="height:9px"><i style="width:${Math.min(100,e.measured/e.days*100)}%;background:linear-gradient(90deg,#5eead4,#ffe14d)"></i></div>
+     <div class="tiny muted" style="margin-top:6px">${S.settings.pStart}〜${S.settings.pEnd}のうち ${e.measured}日ぶん実測、残り${e.days-e.measured}日は平均で外挿。${e.measured<7?"<b style='color:var(--volt2)'>実測が7日未満なので精度は低いです。</b>":""}</div>
+     ${ly?`<div class="hr"></div><div class="tiny">前年同期 <b>${ly.month}</b>（${ly.kwh}kWh / ${ly.days}日 = ${(ly.kwh/ly.days).toFixed(2)} kWh/日、${ly.amount.toLocaleString()}円）と比べて
+       <b class="${pct>0?"up":"down"}">${pct>0?"+":""}${pct.toFixed(0)}%</b>。
+       <span class="muted">金額は燃調と支援で動くので、判定は必ず kWh/日 で。</span></div>`:""}`;
+  }
+
+  const bs=[...S.bills].sort((a,b)=>a.month<b.month?1:-1);
+  $("#tblBills").innerHTML=`<thead><tr><th>請求月</th><th>期間</th><th>日</th><th>kWh</th><th>kWh/日</th><th>円</th><th></th></tr></thead><tbody>${
+    bs.map(b=>`<tr><td>${b.month}</td><td style="color:var(--tx3);font-size:10.5px">${D.md(b.start)}–${D.md(b.end)}</td>
+      <td class="num">${b.days}</td><td class="num">${b.kwh}</td>
+      <td class="num" style="color:${b.kwh/b.days>7?"var(--rose)":b.kwh/b.days<5?"var(--ok)":"var(--volt)"};font-weight:800">${(b.kwh/b.days).toFixed(2)}</td>
+      <td class="num">${b.amount.toLocaleString()}</td>
+      <td><button class="x delBill" data-m="${b.month}" style="color:var(--tx3)">×</button></td></tr>`).join("")
+  }</tbody>`;
+  $$(".delBill").forEach(b=>b.onclick=()=>{
+    if(!confirm(b.dataset.m+" の請求実績を削除しますか？")) return;
+    S.bills=S.bills.filter(x=>x.month!==b.dataset.m); save(); renderAll(); toast("削除しました");
+  });
+  renderSim();
+}
+function renderSim(){
+  const k=+$("#simRange").value; $("#simLbl").textContent=k;
+  const f=+S.settings.fuel,l=+S.settings.levy,t3=+S.settings.tier3;
+  const e=energyCharge(k,t3), lv=Math.floor(k*l), fu=k*f;
+  const tot=billTotal(k,f,l,t3);
+  const tier=k<=15?"最低料金":k<=120?"第1段階 20.20円":k<=300?"第2段階 25.59円":"第3段階 "+t3+"円(推定)";
+  $("#simOut").innerHTML=`
+   <div class="grid2" style="gap:9px">
+     <div class="stat hl"><div class="k">請求額</div><div class="v num">${tot.toLocaleString()}<small>円</small></div><div class="s">${(k/30).toFixed(2)} kWh/日相当</div></div>
+     <div class="stat"><div class="k">現在の区分</div><div class="v" style="font-size:14px;line-height:1.5;padding-top:5px">${tier}</div></div>
+   </div>
+   <table style="margin-top:10px"><tbody>
+     <tr><td>電力量料金（最低料金込）</td><td class="num">${Math.round(e).toLocaleString()}</td></tr>
+     <tr><td>燃料費調整 @${f}</td><td class="num">${Math.round(fu).toLocaleString()}</td></tr>
+     <tr><td>再エネ賦課金 @${l}</td><td class="num">${lv.toLocaleString()}</td></tr>
+     <tr><td style="font-weight:900">合計</td><td class="num" style="font-weight:900">${tot.toLocaleString()}</td></tr>
+   </tbody></table>
+   <div class="tiny muted" style="margin-top:7px">1kWh減らすと約 <b style="color:var(--ok)">${(tot-billTotal(k-1,f,l,t3))}円</b>／月。30日continuousで100W切ると月72kWh＝約${(tot-billTotal(Math.max(0,k-72),f,l,t3)).toLocaleString()}円。</div>`;
+}
+
+/* ==================================================================
+   CHARTS
+================================================================== */
+let RANGE=14;
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+function renderChartDaily(){
+  const svg=$("#chDaily"); const W=340,H=190,L=26,R=6,T=10,B=24;
+  const m=series(); let dates=sortedDates(m);
+  if(RANGE<9999) dates=dates.slice(-RANGE);
+  $("#lgBase").textContent=S.settings.base; $("#lgTgt").textContent=S.settings.target;
+  if(!dates.length){
+    svg.innerHTML=`<text x="170" y="95" text-anchor="middle" fill="#6b7490" font-size="12">まだ日次データがありません</text>`;
+    $("#tipDaily").textContent="メーターを2回以上記録すると、ここに日次の棒グラフと7日移動平均が出ます。";
+    return;
+  }
+  const vals=dates.map(d=>m.get(d).v);
+  const maxV=Math.max(...vals,S.settings.base,S.settings.target)*1.18;
+  const x=i=>L+(dates.length===1?(W-L-R)/2:i*(W-L-R)/(dates.length-1||1));
+  const y=v=>T+(1-v/maxV)*(H-T-B);
+  const bw=Math.max(3,Math.min(16,(W-L-R)/dates.length*0.62));
+  let g="";
+  for(let i=0;i<=4;i++){const v=maxV*i/4;g+=`<line class="glin" x1="${L}" y1="${y(v)}" x2="${W-R}" y2="${y(v)}"/><text x="${L-4}" y="${y(v)+3}" text-anchor="end">${v.toFixed(0)}</text>`}
+  const rl=(v,c,dash)=>`<line x1="${L}" y1="${y(v)}" x2="${W-R}" y2="${y(v)}" stroke="${c}" stroke-width="1.3" stroke-dasharray="${dash}" opacity=".8"/>`;
+  g+=rl(S.settings.base,"#4ade80","4 3")+rl(S.settings.target,"#fb7185","4 3");
+
+  let bars="";
+  dates.forEach((d,i)=>{
+    const o=m.get(d);
+    const col=o.v<=S.settings.target?"#4ade80":o.v>=S.settings.alertMa?"#fb7185":"#7dd3fc";
+    bars+=`<rect class="hit" data-d="${d}" x="${x(i)-bw/2}" y="${y(o.v)}" width="${bw}" height="${Math.max(1.5,H-B-y(o.v))}" rx="${Math.min(3,bw/2)}" fill="${col}" opacity="${o.est?.42:.85}"/>`;
+  });
+  let pts=[];
+  dates.forEach((d,i)=>{const a=ma7(m,d); if(a!=null) pts.push([x(i),y(a)])});
+  const line=pts.length>1?`<polyline points="${pts.map(p=>p.join(",")).join(" ")}" fill="none" stroke="#ffe14d" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round" filter="drop-shadow(0 0 5px rgba(255,225,77,.55))"/>`:"";
+  const dot=pts.length?`<circle cx="${pts[pts.length-1][0]}" cy="${pts[pts.length-1][1]}" r="4" fill="#fff" stroke="#ffe14d" stroke-width="2.5"/>`:"";
+
+  let evm="";
+  const evSet=new Set(S.events.map(e=>e.date));
+  dates.forEach((d,i)=>{ if(evSet.has(d)) evm+=`<circle cx="${x(i)}" cy="${H-B+7}" r="3.2" fill="#a78bfa"/>` });
+
+  const step=Math.max(1,Math.ceil(dates.length/7));
+  let xl="";
+  dates.forEach((d,i)=>{ if(i%step===0||i===dates.length-1) xl+=`<text x="${x(i)}" y="${H-6}" text-anchor="middle">${D.md(d)}</text>` });
+
+  svg.innerHTML=g+bars+line+dot+evm+xl+
+    `<rect x="0" y="0" width="${W}" height="${H}" fill="transparent" id="dailyHit"/>`;
+  svg.onclick=ev=>{
+    const r=svg.getBoundingClientRect();
+    const px=(ev.clientX-r.left)/r.width*W;
+    let bi=0,bd=1e9;
+    dates.forEach((d,i)=>{const dd=Math.abs(x(i)-px); if(dd<bd){bd=dd;bi=i}});
+    showDaily(dates[bi],m);
+  };
+  showDaily(dates[dates.length-1],m);
+}
+function showDaily(d,m){
+  const o=m.get(d); if(!o) return;
+  const a=ma7(m,d), ly=lastYearPerDay(d);
+  const evs=S.events.filter(e=>e.date===d);
+  $("#tipDaily").innerHTML=`<b>${d}（${D.wd(d)}）</b>
+    <span style="font-size:17px;font-weight:900" class="num">${o.v.toFixed(2)}</span> kWh/日
+    ${o.est?'<span class="est">按分'+o.span+'日</span>':""}
+    <div class="tiny muted" style="margin-top:3px">
+      7日平均 ${a?a.toFixed(2):"–"} ／ 前年同期 ${ly?ly.toFixed(2):"–"}
+      ${a?`／ 平均比 <b class="${o.v>a?"up":"down"}">${o.v>a?"+":""}${((o.v/a-1)*100).toFixed(0)}%</b>`:""}
+    </div>
+    ${evs.length?`<div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:5px">${evs.map(e=>`<span class="tag t-${e.tag}">${tagLabel(e.tag)}${e.desc?" "+esc(e.desc):""}</span>`).join("")}</div>`:""}`;
+}
+
+function renderChartMonthly(){
+  const svg=$("#chMonthly"); const W=340,H=175,L=26,R=6,T=10,B=30;
+  const bs=[...S.bills].sort((a,b)=>a.month<b.month?-1:1);
+  if(!bs.length){svg.innerHTML="";return}
+  const vals=bs.map(b=>b.kwh/b.days);
+  const maxV=Math.max(...vals)*1.2;
+  const x=i=>L+i*(W-L-R)/(bs.length-1||1);
+  const y=v=>T+(1-v/maxV)*(H-T-B);
+  let g="";
+  for(let i=0;i<=4;i++){const v=maxV*i/4;g+=`<line class="glin" x1="${L}" y1="${y(v)}" x2="${W-R}" y2="${y(v)}"/><text x="${L-4}" y="${y(v)+3}" text-anchor="end">${v.toFixed(0)}</text>`}
+  g+=`<line x1="${L}" y1="${y(S.settings.base)}" x2="${W-R}" y2="${y(S.settings.base)}" stroke="#4ade80" stroke-width="1.3" stroke-dasharray="4 3" opacity=".85"/>`;
+  const seg=(yr,col)=>{
+    const p=bs.map((b,i)=>b.month.startsWith(yr)?[x(i),y(b.kwh/b.days)]:null).filter(Boolean);
+    return p.length>1?`<polyline points="${p.map(q=>q.join(",")).join(" ")}" fill="none" stroke="${col}" stroke-width="2.8" stroke-linejoin="round" stroke-linecap="round"/>`:"";
+  };
+  let dots="";
+  bs.forEach((b,i)=>{
+    const c=b.month.startsWith("2025")?"#5eead4":"#ffb020";
+    dots+=`<circle cx="${x(i)}" cy="${y(b.kwh/b.days)}" r="3.4" fill="${c}" stroke="#0b0d1a" stroke-width="1.2" class="mhit" data-i="${i}" style="cursor:pointer"/>`;
+  });
+  let xl="";
+  bs.forEach((b,i)=>{ if(i%3===0||i===bs.length-1) xl+=`<text x="${x(i)}" y="${H-12}" text-anchor="middle">${b.month.slice(2).replace("-","/")}</text>` });
+  const peak=bs.reduce((a,b)=>b.kwh/b.days>a.kwh/a.days?b:a);
+  const pi=bs.indexOf(peak);
+  const ann=`<text x="${Math.min(W-40,x(pi))}" y="${y(peak.kwh/peak.days)-8}" text-anchor="middle" fill="#ffb020" font-size="10" font-weight="800">${(peak.kwh/peak.days).toFixed(2)}</text>`;
+  svg.innerHTML=g+seg("2025","#5eead4")+seg("2026","#ffb020")+dots+xl+ann;
+  $$("#chMonthly .mhit").forEach(el=>el.onclick=()=>{
+    const b=bs[+el.dataset.i];
+    $("#tipMonthly").innerHTML=`<b>${b.month}</b>（${b.start}〜${b.end}／${b.days}日）<br>
+      <span class="num" style="font-size:17px;font-weight:900">${(b.kwh/b.days).toFixed(2)}</span> kWh/日　${b.kwh}kWh　${b.amount.toLocaleString()}円
+      <div class="tiny muted">燃調 ${b.fuel}円（${(b.fuel/b.kwh).toFixed(2)}円/kWh）／賦課金 ${b.levy}円</div>`;
+  });
+}
+
+function renderChartYoy(){
+  const svg=$("#chYoy"); const W=340,H=165,L=26,R=6,T=10,B=26;
+  const by={};
+  S.bills.forEach(b=>{const[y,mo]=b.month.split("-");(by[mo]=by[mo]||{})[y]=b.kwh/b.days});
+  const months=Object.keys(by).filter(mo=>by[mo]["2025"]&&by[mo]["2026"]).sort();
+  if(!months.length){svg.innerHTML=`<text x="170" y="85" text-anchor="middle" fill="#6b7490" font-size="12">比較できる月がありません</text>`;return}
+  const maxV=Math.max(...months.flatMap(mo=>[by[mo]["2025"],by[mo]["2026"]]))*1.22;
+  const gw=(W-L-R)/months.length;
+  const y=v=>T+(1-v/maxV)*(H-T-B);
+  let g="";
+  for(let i=0;i<=4;i++){const v=maxV*i/4;g+=`<line class="glin" x1="${L}" y1="${y(v)}" x2="${W-R}" y2="${y(v)}"/><text x="${L-4}" y="${y(v)+3}" text-anchor="end">${v.toFixed(0)}</text>`}
+  let bars="",lbl="";
+  months.forEach((mo,i)=>{
+    const cx=L+gw*i+gw/2, bw=Math.min(15,gw*0.32);
+    const a=by[mo]["2025"],b=by[mo]["2026"];
+    bars+=`<rect x="${cx-bw-1.5}" y="${y(a)}" width="${bw}" height="${H-B-y(a)}" rx="3" fill="#5eead4" opacity=".9"/>`;
+    bars+=`<rect x="${cx+1.5}" y="${y(b)}" width="${bw}" height="${H-B-y(b)}" rx="3" fill="#fb7185" opacity=".9"/>`;
+    bars+=`<text x="${cx}" y="${y(Math.max(a,b))-4}" text-anchor="middle" fill="#fb7185" font-size="9" font-weight="800">+${((b/a-1)*100).toFixed(0)}%</text>`;
+    lbl+=`<text x="${cx}" y="${H-9}" text-anchor="middle">${+mo}月</text>`;
+  });
+  svg.innerHTML=g+bars+lbl;
+}
+
+/* ==================================================================
+   LISTS
+================================================================== */
+const TAGS={aircon:"❄️ エアコン",guest:"👥 来客",away:"✈️ 不在",defrost:"🧊 霜取り",pc:"💻 PC",appliance:"🔌 家電",other:"📝 その他"};
+const tagLabel=t=>TAGS[t]||t;
+
+function renderLists(){
+  const m=series();
+  const rs=[...S.readings].sort((a,b)=>a.date<b.date?1:-1);
+  $("#listReadings").innerHTML = rs.length? rs.map(r=>{
+    const o=m.get(r.date);
+    const evs=S.events.filter(e=>e.date===r.date);
+    return `<div class="item">
+      <div class="d">${D.md(r.date)}<br><span style="color:var(--tx3);font-weight:600">${D.wd(r.date)} ${r.time||""}</span></div>
+      <div class="m">積算 <b class="num">${r.meter}</b> kWh
+        ${evs.length?`<div class="sub" style="margin-top:2px">${evs.map(e=>`<span class="tag t-${e.tag}">${tagLabel(e.tag)}</span>`).join(" ")}</div>`:""}
+      </div>
+      <div class="kw num" style="color:${!o?"var(--tx3)":o.v<=S.settings.target?"var(--ok)":o.v>=S.settings.alertMa?"var(--rose)":"var(--sky)"}">
+        ${o?o.v.toFixed(2):"–"}${o&&o.est?'<span class="est">推定</span>':""}</div>
+      <button class="x delR" data-d="${r.date}">×</button></div>`;
+  }).join("") : `<div class="empty">記録がまだありません</div>`;
+  $$(".delR").forEach(b=>b.onclick=()=>{
+    if(!confirm(b.dataset.d+" の記録を削除しますか？")) return;
+    S.readings=S.readings.filter(r=>r.date!==b.dataset.d);
+    S.mascot.streak=streakOf(); save(); renderAll(); toast("削除しました");
+  });
+
+  const es=[...S.events].sort((a,b)=>a.date<b.date?1:-1);
+  $("#listEvents").innerHTML = es.length? es.map((e,i)=>`<div class="item">
+      <div class="d">${D.md(e.date)}<br><span style="color:var(--tx3);font-weight:600">${D.wd(e.date)}</span></div>
+      <div class="m"><span class="tag t-${e.tag}">${tagLabel(e.tag)}</span>
+        ${e.desc?`<div class="sub" style="margin-top:3px">${esc(e.desc)}</div>`:""}</div>
+      <button class="x delE" data-i="${S.events.indexOf(e)}">×</button></div>`).join("")
+    : `<div class="empty">イベントがまだありません<br><span class="tiny">エアコン使用・来客・霜取りなどを残しておくと、数字の説明がつきます</span></div>`;
+  $$(".delE").forEach(b=>b.onclick=()=>{ S.events.splice(+b.dataset.i,1); save(); renderAll(); toast("削除しました") });
+}
+
+/* ==================================================================
+   CSV / backup
+================================================================== */
+function dl(name,txt,mime){
+  const b=new Blob(["﻿"+txt],{type:mime||"text/csv;charset=utf-8"});
+  const u=URL.createObjectURL(b), a=document.createElement("a");
+  a.href=u; a.download=name; a.click();
+  setTimeout(()=>URL.revokeObjectURL(u),2000);
+  toast(name+" を書き出しました");
+}
+const q=v=>`"${String(v==null?"":v).replace(/"/g,'""')}"`;
+function exportReadings(){
+  const m=series();
+  const rows=[["date","weekday","time","meter_kwh","daily_kwh","is_estimated","span_days","events"]];
+  [...S.readings].sort((a,b)=>a.date<b.date?-1:1).forEach(r=>{
+    const o=m.get(r.date);
+    rows.push([r.date,D.wd(r.date),r.time||"",r.meter,o?o.v.toFixed(3):"",o?(o.est?1:0):"",o?o.span:"",
+      S.events.filter(e=>e.date===r.date).map(e=>e.tag+(e.desc?":"+e.desc:"")).join("|")]);
+  });
+  dl("denki_readings.csv",rows.map(r=>r.map(q).join(",")).join("\r\n"));
+}
+function exportEvents(){
+  const rows=[["date","tag","description"],...[...S.events].sort((a,b)=>a.date<b.date?-1:1).map(e=>[e.date,e.tag,e.desc||""])];
+  dl("denki_events.csv",rows.map(r=>r.map(q).join(",")).join("\r\n"));
+}
+function exportBills(){
+  const rows=[["billing_month","period_start","period_end","days","kwh","kwh_per_day","amount","fuel_adjustment","renewable_levy"],
+    ...[...S.bills].sort((a,b)=>a.month<b.month?-1:1).map(b=>[b.month,b.start,b.end,b.days,b.kwh,(b.kwh/b.days).toFixed(2),b.amount,b.fuel,b.levy])];
+  dl("denki_bills.csv",rows.map(r=>r.map(q).join(",")).join("\r\n"));
+}
+
+/* ==================================================================
+   UI wiring
+================================================================== */
+let toastT;
+function toast(t){ const e=$("#toast"); e.textContent=t; e.classList.add("on"); clearTimeout(toastT); toastT=setTimeout(()=>e.classList.remove("on"),2600) }
+
+function go(v){
+  $$("section.view").forEach(s=>s.classList.toggle("on",s.id==="v-"+v));
+  $$("nav.tabs button").forEach(b=>b.classList.toggle("on",b.dataset.v===v));
+  window.scrollTo({top:0,behavior:"instant"});
+  if(v==="chart"){renderChartDaily();renderChartMonthly();renderChartYoy()}
+  if(v==="bill") renderBillView();
+}
+function renderAll(){
+  renderHome(); renderLists();
+  if($("#v-chart").classList.contains("on")){renderChartDaily();renderChartMonthly();renderChartYoy()}
+  if($("#v-bill").classList.contains("on")) renderBillView();
+}
+
+function bind(){
+  $$("nav.tabs button").forEach(b=>b.onclick=()=>go(b.dataset.v));
+
+  /* home input */
+  $("#inDate").value=D.today(); $("#inTime").value=D.now(); $("#bfDate").value=D.today(); $("#evDate").value=D.today();
+  $("#inMeter").addEventListener("input",livePredict);
+  $("#inDate").addEventListener("change",livePredict);
+  $("#btnSave").onclick=()=>{
+    const v=parseFloat($("#inMeter").value);
+    const date=$("#inDate").value||D.today(), time=$("#inTime").value||D.now();
+    if(isNaN(v)||v<0) return toast("積算値を入力してください");
+    const prev=[...S.readings].filter(r=>r.date<date).sort((a,b)=>a.date<b.date?-1:1).pop();
+    if(prev&&v<prev.meter&&!confirm(`前回(${prev.meter})より小さい値です。このまま記録しますか？`)) return;
+    if(prev){
+      const days=Math.max(1,D.diff(prev.date,date)), per=(v-prev.meter)/days;
+      if(per>30&&!confirm(`1日あたり ${per.toFixed(1)}kWh になります。桁の読み違いかもしれません。記録しますか？`)) return;
+    }
+    upsertReading(date,time,v);
+    $("#inMeter").value=""; livePredict();
+    $("#inMeter").blur();
+  };
+  $("#mascotBtn").onclick=()=>{
+    if(S.mascot.volt>=7){ S.mascot.volt=0; S.mascot.thunders++; save(); thunder(); toast(S.settings.name+"の10まんワット！") }
+    else { hop(); const l=LINES[moodNow()]; $("#bubble").textContent=l[Math.floor(Math.random()*l.length)];
+      if(navigator.vibrate) try{navigator.vibrate(14)}catch(e){} }
+  };
+
+  /* chart range */
+  $$("#segRange button").forEach(b=>b.onclick=()=>{
+    $$("#segRange button").forEach(x=>x.classList.remove("on")); b.classList.add("on");
+    RANGE=+b.dataset.r; renderChartDaily();
+  });
+
+  /* log tabs */
+  $$("#segLog button").forEach(b=>b.onclick=()=>{
+    $$("#segLog button").forEach(x=>x.classList.remove("on")); b.classList.add("on");
+    $("#logR").style.display=b.dataset.t==="r"?"":"none";
+    $("#logE").style.display=b.dataset.t==="e"?"":"none";
+  });
+  $("#bfAdd").onclick=()=>{
+    const v=parseFloat($("#bfMeter").value), d=$("#bfDate").value;
+    if(!d||isNaN(v)) return toast("日付と積算値を入れてください");
+    upsertReading(d,$("#bfTime").value||"21:00",v,true);
+    S.mascot.streak=streakOf(); save(); renderAll(); $("#bfMeter").value=""; toast(d+" を追加しました");
+  };
+
+  /* events */
+  let evTag="aircon";
+  $$("#evTags button").forEach(b=>b.onclick=()=>{
+    $$("#evTags button").forEach(x=>x.classList.remove("on")); b.classList.add("on"); evTag=b.dataset.t;
+  });
+  $("#evAdd").onclick=()=>{
+    const d=$("#evDate").value; if(!d) return toast("日付を入れてください");
+    S.events.push({date:d,tag:evTag,desc:$("#evDesc").value.trim()});
+    save(); $("#evDesc").value=""; renderAll(); toast("イベントを追加しました"); sparkBurst(8);
+  };
+
+  /* bill */
+  const sset=(id,key,num)=>{ const el=$(id); el.onchange=()=>{ S.settings[key]=num?+el.value:el.value; save(); renderAll() } };
+  sset("#pStart","pStart"); sset("#pEnd","pEnd"); sset("#fuelRate","fuel",1); sset("#levyRate","levy",1);
+  $$(".fp").forEach(b=>b.onclick=()=>{ S.settings.fuel=+b.dataset.v; save(); renderBillView(); renderHome(); toast("燃調を "+b.dataset.v+" 円/kWh にしました") });
+  $("#bAdd").onclick=()=>{
+    const mo=$("#bMonth").value, s=$("#bStart").value, e=$("#bEnd").value, k=+$("#bKwh").value;
+    if(!mo||!s||!e||!k) return toast("請求月・期間・kWh は必須です");
+    const days=D.diff(s,e)+1;
+    S.bills=S.bills.filter(b=>b.month!==mo);
+    S.bills.push({month:mo,start:s,end:e,days,kwh:k,amount:+$("#bAmt").value||0,fuel:+$("#bFuel").value||0,levy:+$("#bLevy").value||0});
+    save(); renderAll(); toast(mo+" を追加しました（"+(k/days).toFixed(2)+" kWh/日）"); sparkBurst(10);
+    ["#bMonth","#bStart","#bEnd","#bKwh","#bAmt","#bFuel","#bLevy"].forEach(x=>$(x).value="");
+  };
+  $("#simRange").oninput=renderSim;
+
+  /* settings */
+  const st=S.settings;
+  $("#stBase").value=st.base; $("#stTgt").value=st.target; $("#stAlert").value=st.alertMa;
+  $("#stYoy").value=st.alertYoy; $("#stGap").value=st.gap; $("#stNorm").checked=!!st.norm;
+  $("#stTier3").value=st.tier3; $("#stName").value=st.name;
+  const bindS=(id,key,num)=>{ const el=$(id); el.onchange=()=>{ S.settings[key]=num?+el.value:(el.type==="checkbox"?el.checked:el.value); save(); renderAll() } };
+  bindS("#stBase","base",1); bindS("#stTgt","target",1); bindS("#stAlert","alertMa",1); bindS("#stYoy","alertYoy",1);
+  bindS("#stGap","gap"); bindS("#stNorm","norm"); bindS("#stTier3","tier3",1); bindS("#stName","name");
+
+  $("#btnPic").onclick=()=>$("#filePic").click();
+  $("#filePic").onchange=e=>{
+    const f=e.target.files[0]; if(!f) return;
+    const img=new Image(), rd=new FileReader();
+    rd.onload=()=>{ img.onload=()=>{
+      const max=340, sc=Math.min(1,max/Math.max(img.width,img.height));
+      const c=document.createElement("canvas"); c.width=img.width*sc; c.height=img.height*sc;
+      c.getContext("2d").drawImage(img,0,0,c.width,c.height);
+      S.settings.pic=c.toDataURL("image/png"); save(); renderMascot(); paintMascot(); toast("マスコットを差し替えました");
+    }; img.src=rd.result };
+    rd.readAsDataURL(f); e.target.value="";
+  };
+  $("#btnPicClear").onclick=()=>{ S.settings.pic=null; save(); renderMascot(); paintMascot(); toast("ビリすけに戻しました") };
+
+  $("#exR").onclick=exportReadings; $("#exE").onclick=exportEvents; $("#exB").onclick=exportBills;
+  $("#exJ").onclick=()=>dl("denki_backup_"+D.today()+".json",JSON.stringify(S,null,1),"application/json");
+  $("#imJ").onclick=()=>$("#fileJ").click();
+  $("#fileJ").onchange=e=>{
+    const f=e.target.files[0]; if(!f) return;
+    const rd=new FileReader();
+    rd.onload=()=>{ try{
+      const o=JSON.parse(rd.result);
+      if(!o.settings||!o.readings) throw 0;
+      if(!confirm("現在のデータを、このバックアップで置き換えます。よろしいですか？")) return;
+      S=deepMerge(structuredClone(DEFAULTS),o); save(); location.reload();
+    }catch(err){ toast("読み込めませんでした") } };
+    rd.readAsText(f); e.target.value="";
+  };
+  $("#btnReset").onclick=()=>{
+    if(!confirm("すべての記録・イベント・設定を消して初期状態に戻します。よろしいですか？")) return;
+    if(!confirm("本当に消してよいですか？ この操作は取り消せません。")) return;
+    localStorage.removeItem(KEY); location.reload();
+  };
+  $("#verTx").textContent="ver "+VER+"／データはこの端末のブラウザ内のみ。外部送信はありません。";
+}
+
+/* ---------- boot ---------- */
+load();
+S.mascot.streak=streakOf();
+renderMascot();
+bind();
+renderAll();
+livePredict();
+if("serviceWorker" in navigator && location.protocol==="https:")
+  addEventListener("load",()=>navigator.serviceWorker.register("./sw.js").catch(()=>{}));
+document.addEventListener("visibilitychange",()=>{ if(!document.hidden){ S.mascot.streak=streakOf(); renderAll() } });
+</script>
+</body>
+</html>

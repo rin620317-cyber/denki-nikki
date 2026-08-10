@@ -1,0 +1,16 @@
+# 調査用の作業ドキュメント（アプリの動作には不要／記述が詳細なため非公開）
+denki-handoff.md
+denki-app-spec.md
+
+# バックアップ・書き出し
+*.backup.json
+denki_backup_*.json
+denki_readings.csv
+denki_events.csv
+denki_bills.csv
+
+# 作業ファイル
+_*.png
+Thumbs.db
+desktop.ini
+.DS_Store
