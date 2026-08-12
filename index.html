@@ -1925,7 +1925,9 @@ function exportBills(){
    同期（Firebase Realtime Database / REST + SSE）
    接続情報はコードに持たず、各端末の設定に保存する
 ================================================================== */
-const SYNC={es:null,poll:null,busy:false,last:null,err:null,pushT:null};
+const SYNC={es:null,esOk:false,poll:null,busy:false,last:null,err:null,pushT:null,pushed:{},rev:null,pulls:0,pushes:0,bytes:0};
+/* 内容が変わっていなければ送らないための軽い指紋 */
+function sig(t){ let h=5381; for(let i=0;i<t.length;i++) h=((h*33)^t.charCodeAt(i))>>>0; return t.length+":"+h.toString(36) }
 /* 二人が同じ数字を見るために、計算と判定に関わる設定は共有する。
    マスコットや演出などの見た目の好みは端末ごとに残す */
 const SHARED_SET=["gap","norm","base","target","alertMa","alertYoy","tier3","fuel","levy","pStart","pEnd","dryer"];
@@ -2009,31 +2011,52 @@ function syncStatText(){
   if(!SYNC.last) return '<span class="muted">まだ同期していません。</span>';
   const d=new Date(SYNC.last);
   return '<span style="color:var(--ok)">✓ 最終同期 '+p2(d.getHours())+":"+p2(d.getMinutes())+":"+p2(d.getSeconds())+
-    '</span>　<span class="muted">'+(SYNC.es?"リアルタイム受信中":"1分ごとに確認")+'</span>';
+    '</span>　<span class="muted">'+(SYNC.esOk?"リアルタイム受信中":"1分ごとに確認")+
+    '　この起動中の通信 '+(SYNC.bytes/1024).toFixed(1)+'KB（受信'+SYNC.pulls+'・送信'+SYNC.pushes+'回）</span>';
+}
+/* 全体を取りに行く前に「更新印」だけ見る。変わっていなければ数バイトで済む */
+async function syncPeek(){
+  const res=await fetch(syncBase()+"/meta/rev.json",{cache:"no-store"});
+  if(!res.ok) throw new Error("HTTP "+res.status+(res.status===401||res.status===403?"（ルールで拒否されました）":""));
+  const t=await res.text(); SYNC.bytes+=t.length;
+  return t&&t!=="null" ? JSON.parse(t) : null;
 }
 async function syncPull(){
   if(!syncReady()) return false;
   const res=await fetch(syncBase()+".json",{cache:"no-store"});
   if(!res.ok) throw new Error("HTTP "+res.status+(res.status===401||res.status===403?"（ルールで拒否されました）":""));
-  const d=await res.json();
-  return mergeRemote(d);
+  const txt=await res.text();
+  SYNC.pulls++; SYNC.bytes+=txt.length;
+  return mergeRemote(JSON.parse(txt||"null"));
 }
 async function syncPush(){
-  if(!syncReady()) return;
+  if(!syncReady()) return 0;
   const p=localPayload(), b=syncBase();
+  let sent=0;
   for(const k of ["readings","events","bills","tomb","settings"]){
     const body=JSON.stringify(p[k]||{});
     if(body==="{}") continue;
+    const g=sig(body);
+    if(SYNC.pushed[k]===g) continue;          // 前回送ったものと同じなら送らない
     const res=await fetch(b+"/"+k+".json",{method:"PATCH",headers:{"Content-Type":"application/json"},body});
     if(!res.ok) throw new Error("HTTP "+res.status);
+    SYNC.pushed[k]=g; SYNC.pushes++; SYNC.bytes+=body.length; sent+=body.length;
   }
+  return sent;
 }
 async function syncNow(quiet){
   if(!syncReady()||SYNC.busy) return;
   SYNC.busy=true; SYNC.err=null; syncStat("run","同期中");
   try{
-    const ch=await syncPull();
-    await syncPush();
+    let ch=false;
+    const rev=await syncPeek();
+    if(rev===null||rev!==SYNC.rev){ ch=await syncPull(); SYNC.rev=rev }
+    const sent=await syncPush();
+    if(sent){                                   // 自分が書いたときだけ更新印を進める
+      const r=nowMs();
+      const res=await fetch(syncBase()+"/meta/rev.json",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(r)});
+      if(res.ok) SYNC.rev=r;
+    }
     SYNC.err=null; SYNC.busy=false; syncStat("ok","同期");
     if(ch){ save(); renderAll(); if(!quiet) toast("相手の記録を取り込みました") }
     else save();
@@ -2045,6 +2068,7 @@ async function syncNow(quiet){
 function syncPushSoon(){ if(!syncReady()) return; clearTimeout(SYNC.pushT); SYNC.pushT=setTimeout(()=>syncNow(true),1200) }
 function syncStop(){
   if(SYNC.es){ try{SYNC.es.close()}catch(e){} SYNC.es=null }
+  SYNC.esOk=false;
   if(SYNC.poll){ clearInterval(SYNC.poll); SYNC.poll=null }
   syncStat("","同期オフ");
 }
@@ -2055,12 +2079,17 @@ function syncStart(){
   /* Firebase の REST は EventSource でそのまま購読できる */
   try{
     SYNC.es=new EventSource(syncBase()+".json");
-    const on=()=>{ if(!SYNC.busy) syncPull().then(ch=>{ if(ch){save();renderAll();syncStat("ok","同期")} }).catch(()=>{}) };
+    const on=()=>{ if(!SYNC.busy) syncPull().then(ch=>{ SYNC.rev=null; if(ch){save();renderAll();syncStat("ok","同期")} }).catch(()=>{}) };
+    SYNC.es.onopen=()=>{ SYNC.esOk=true };
     SYNC.es.addEventListener("put",on);
     SYNC.es.addEventListener("patch",on);
-    SYNC.es.onerror=()=>{ if(SYNC.es){try{SYNC.es.close()}catch(e){} SYNC.es=null} };
-  }catch(e){ SYNC.es=null }
-  SYNC.poll=setInterval(()=>syncNow(true),60000);
+    SYNC.es.onerror=()=>{ SYNC.esOk=false; if(SYNC.es){try{SYNC.es.close()}catch(e){} SYNC.es=null} };
+  }catch(e){ SYNC.es=null; SYNC.esOk=false }
+  SYNC.poll=setInterval(()=>{
+    if(document.hidden) return;                                   // 画面に出ていなければ何もしない
+    if(SYNC.esOk && nowMs()-(SYNC.last||0) < 300000) return;       // 受信中なら5分に1回の保険だけ
+    syncNow(true);
+  },60000);
 }
 /* 招待コード: URL と合言葉を1つの文字列にまとめる。もう1台へはこれを渡すだけでよい */
 function inviteMake(){
@@ -2313,7 +2342,15 @@ livePredict();
 if("serviceWorker" in navigator && location.protocol==="https:")
   addEventListener("load",()=>navigator.serviceWorker.register("./sw.js").catch(()=>{}));
 if(S.settings.sync&&S.settings.sync.on){ $("#pSync").style.display=""; syncStart() }
-document.addEventListener("visibilitychange",()=>{ if(!document.hidden){ S.mascot.streak=streakOf(); renderAll(); syncNow(true) } });
+document.addEventListener("visibilitychange",()=>{
+  if(document.hidden){
+    /* 裏に回ったら受信用の接続を閉じる。復帰時に張り直す */
+    if(SYNC.es){ try{SYNC.es.close()}catch(e){} SYNC.es=null; SYNC.esOk=false }
+    return;
+  }
+  S.mascot.streak=streakOf(); renderAll();
+  if(S.settings.sync&&S.settings.sync.on){ if(!SYNC.es) syncStart(); else syncNow(true) }
+});
 </script>
 </body>
 </html>

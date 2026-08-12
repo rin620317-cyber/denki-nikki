@@ -1,5 +1,5 @@
 /* でんき日記 service worker — アプリ本体をキャッシュして圏外でも開けるようにする */
-const VERSION = "v6";
+const VERSION = "v7";
 const CACHE = "denki-nikki-" + VERSION;
 const ASSETS = [
   "./",
