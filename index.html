@@ -397,6 +397,11 @@ details[open] summary:before{content:"▾ "}
   </div>
 
   <div class="card">
+    <h3><span class="dot"></span>増えた分の内訳</h3>
+    <div id="breakdownViz"></div>
+  </div>
+
+  <div class="card">
     <h3><span class="dot"></span>調査メモ</h3>
     <div class="tiny muted" id="missionBox"></div>
   </div>
@@ -540,10 +545,14 @@ details[open] summary:before{content:"▾ "}
       <div><label>元の水準 kWh/日</label><input type="number" step="0.1" id="stBase"></div>
       <div><label>目標 kWh/日</label><input type="number" step="0.1" id="stTgt"></div>
     </div>
-    <div class="row">
+    <div class="row" style="margin-bottom:10px">
       <div><label>警告する7日平均</label><input type="number" step="0.1" id="stAlert"></div>
       <div><label>前年比 警告 %</label><input type="number" step="1" id="stYoy"></div>
     </div>
+    <label>ドラム式洗濯乾燥機の恒常分 kWh/日</label>
+    <input type="number" step="0.01" id="stDryer">
+    <div class="tiny muted" style="margin-top:7px">2025年7月下旬に導入。請求実績から季節を合わせて逆算した値です。
+      これを元の水準に足したものが <b id="floorTx" style="color:var(--sky)"></b> ＝ 到達しうる下限で、終奥義の解禁条件にもなっています。</div>
   </div>
 
   <div class="card">
@@ -679,7 +688,7 @@ const SEED_BILLS=[
 const DEFAULTS={
   readings:[], events:[], bills:SEED_BILLS,
   settings:{gap:"prorate",norm:false,base:4.2,target:6.8,alertMa:8.5,alertYoy:30,
-    tier3:28.86,fuel:2.97,levy:4.18,calm:null,mvName:{},pStart:"2026-07-22",pEnd:"2026-08-24",name:"ビリすけ",pic:null},
+    tier3:28.86,fuel:2.97,levy:4.18,calm:null,mvName:{},dryer:1.77,pStart:"2026-07-22",pEnd:"2026-08-24",name:"ビリすけ",pic:null},
   mascot:{exp:0,lastLog:null,streak:0,best:0,total:0,volt:0,thunders:0}
 };
 
@@ -749,6 +758,24 @@ function streakOf(){
   return n;
 }
 const lvOf=e=>Math.floor(e/120)+1;
+
+/* 削減できない生活基盤の水準。2025年前半の定常値 + ドラム式洗濯乾燥機の恒常分 */
+const floorKwh=()=>+( (+S.settings.base) + (+S.settings.dryer||0) ).toFixed(2);
+
+/* 請求実績18か月から、季節を合わせて帰属させた内訳（2026年6月 8.11 kWh/日 の分解）
+   A 2025/2-4月 4.29（購入前・冷涼） → B 2025/11-12月 6.06（乾燥機のみ）
+   → C 2026/2-4月 6.75（＋霜）      → D 2026/5-6月 7.82（＋PC2台） */
+const BREAKDOWN=()=>{
+  const base=+S.settings.base, dry=+S.settings.dryer||0, peak=8.11;
+  const frost=0.69, pc=1.07;
+  return {peak, parts:[
+    {k:"base",  v:base, c:"#5eead4", nm:"元の水準",       sub:"2025年前半の定常値",         fix:true},
+    {k:"dryer", v:dry,  c:"#7dd3fc", nm:"洗濯乾燥機",     sub:"2025年7月下旬 導入・恒常",   fix:true},
+    {k:"frost", v:frost,c:"#ffe14d", nm:"冷凍庫の霜",     sub:"2025年12月〜・対策済/判定待ち"},
+    {k:"pc",    v:pc,   c:"#c4b5fd", nm:"常時PC 2台目",   sub:"2026年3月〜・夜間スリープで削減可"},
+    {k:"etc",   v:+(peak-base-dry-frost-pc).toFixed(2), c:"#fb7185", nm:"季節・その他", sub:"初夏の上振れなど"},
+  ]};
+};
 
 /* prior-year kWh/day for a given date, from bills */
 function lastYearPerDay(date){
@@ -1235,10 +1262,10 @@ const MOVES=[
   ds:"秘奥義。名乗りを上げ、カットインとともに撃つ全弾連撃。",
   cond:()=>S.mascot.best>=30, ctx:()=>"30日連続を達成する（最高"+S.mascot.best+"日）", play:playHiougi},
  {id:"zero",    ic:"🌑", def:"零電界",              en:"ZERO WATT",     pow:9999, color:"#ffffff", fin:true,
-  ds:"終奥義。あたりの電気を喰らい尽くし、静寂だけが残る。",
-  cond:()=>{const m=series(),d=sortedDates(m);const a=d.length?ma7(m,d[d.length-1]):null;return a!=null&&a<=S.settings.base},
+  ds:"終奥義。あたりの電気を喰らい尽くし、静寂だけが残る。乾燥機ぶんを差し引いた到達しうる下限まで戻したときだけ撃てる。",
+  cond:()=>{const m=series(),d=sortedDates(m);const a=d.length?ma7(m,d[d.length-1]):null;return a!=null&&a<=floorKwh()},
   ctx:()=>{const m=series(),d=sortedDates(m);const a=d.length?ma7(m,d[d.length-1]):null;
-    return "7日移動平均を "+S.settings.base+" kWh/日 以下に戻す"+(a?"（今 "+a.toFixed(2)+"）":"");}, play:playZero},
+    return "7日移動平均を "+floorKwh()+" kWh/日 以下にする（元の水準"+S.settings.base+"＋乾燥機"+S.settings.dryer+"）"+(a?"／今 "+a.toFixed(2):"");}, play:playZero},
 ];
 const mvOf=id=>MOVES.find(m=>m.id===id);
 function mvName(id){ const c=(S.settings.mvName||{})[id]; return (c&&c.trim())||mvOf(id).def }
@@ -1400,6 +1427,7 @@ function renderHome(){
 
   renderAlerts(m,dates);
   renderTarget(m,dates);
+  renderBreakdown();
   renderMission();
   paintMascot();
 }
@@ -1436,7 +1464,7 @@ function missedDays(){
 
 function renderTarget(m,dates){
   const a=dates.length?ma7(m,dates[dates.length-1]):null;
-  const base=S.settings.base, tgt=S.settings.target, peak=8.11;
+  const base=S.settings.base, tgt=S.settings.target, peak=8.11, flr=floorKwh();
   const cur=a??peak;
   const lo=Math.min(base,cur)-0.4, hi=Math.max(peak,cur)+0.4;
   const px=v=>((v-lo)/(hi-lo))*100;
@@ -1449,20 +1477,53 @@ function renderTarget(m,dates){
      <div style="position:absolute;top:16px;left:${px(cur)}%;transform:translateX(-50%);width:22px;height:22px;border-radius:99px;background:#fff;border:4px solid #ffb020;box-shadow:0 0 16px rgba(255,176,32,.85)"></div>
      ${mark(base,"#4ade80","元 "+base,true)}
      ${mark(tgt,"#fb7185","目標 "+tgt,true)}
+     ${mark(flr,"#7dd3fc","下限 "+flr,false)}
      ${mark(peak,"#9aa3bd","2026/6 8.11",false)}
      <div style="position:absolute;top:48px;left:${px(cur)}%;transform:translateX(-50%);font-size:12px;font-weight:900;color:#ffe14d;white-space:nowrap">現在 ${cur.toFixed(2)}</div>
    </div>
    <div class="tiny muted" style="margin-top:10px">${a?
-      (a<=tgt?"目標圏内。この水準を維持できれば同条件比で月1,000〜1,300円の削減。":
-       `目標まであと <b style="color:var(--volt)">${(a-tgt).toFixed(2)}</b> kWh/日、元の水準まで <b>${(a-base).toFixed(2)}</b> kWh/日。`)
-      :"7日平均が出ると現在地が表示されます（表示中は2026年6月の実績値）。"}</div>`;
+      (a<=flr?"到達しうる下限を下回っています。ここまで来れば十分。":
+       a<=tgt?`目標圏内。下限 ${flr} まではあと <b>${(a-flr).toFixed(2)}</b> kWh/日。`:
+       `目標まであと <b style="color:var(--volt)">${(a-tgt).toFixed(2)}</b> kWh/日、下限 ${flr} まで <b>${(a-flr).toFixed(2)}</b> kWh/日。`)
+      :"7日平均が出ると現在地が表示されます（表示中は2026年6月の実績値）。"}
+     <br><b style="color:var(--sky)">下限 ${flr}</b> は、元の水準 ${base} にドラム式洗濯乾燥機の恒常分 ${S.settings.dryer} を足した値。
+     ${base} には戻りません。</div>`;
+}
+
+function renderBreakdown(){
+  const b=BREAKDOWN(), tot=b.peak;
+  const cut=b.parts.filter(p=>!p.fix).reduce((x,p)=>x+p.v,0)-b.parts.find(p=>p.k==="etc").v;
+  const bar=b.parts.map(p=>`<div title="${p.nm}" style="width:${(p.v/tot*100).toFixed(2)}%;background:${p.c};
+      ${p.fix?"":"background-image:repeating-linear-gradient(45deg,rgba(0,0,0,.16) 0 5px,transparent 5px 10px)"}"></div>`).join("");
+  const rows=b.parts.map(p=>`<div style="display:flex;align-items:baseline;gap:9px;padding:6px 0;border-bottom:1px solid var(--line)">
+      <span style="width:11px;height:11px;border-radius:3px;background:${p.c};flex:none;transform:translateY(1px)"></span>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12.5px;font-weight:800">${p.nm}
+          ${p.fix?'<span style="font-size:9.5px;color:var(--tx3);font-weight:700;margin-left:5px">削減不可</span>':''}</div>
+        <div class="tiny" style="color:var(--tx3)">${p.sub}</div>
+      </div>
+      <div class="num" style="font-weight:900;font-size:14px;color:${p.c};white-space:nowrap">${p.v.toFixed(2)}</div>
+      <div class="num tiny" style="color:var(--tx3);width:62px;text-align:right;white-space:nowrap">${Math.round(p.v*30)} kWh/月</div>
+    </div>`).join("");
+  $("#breakdownViz").innerHTML=`
+    <div style="display:flex;height:26px;border-radius:8px;overflow:hidden;border:1px solid var(--line)">${bar}</div>
+    <div class="tiny muted" style="display:flex;justify-content:space-between;margin:5px 2px 10px">
+      <span>0</span><span>2026年6月の実績 ${tot} kWh/日</span></div>
+    ${rows}
+    <div class="tiny" style="margin-top:10px;color:var(--tx2);line-height:1.6">
+      斜線は削減できる分。<b style="color:var(--volt)">残る削減余地は ${cut.toFixed(2)} kWh/日（約${Math.round(cut*30)} kWh/月・${Math.round(cut*30*25.59).toLocaleString()}円/月）</b>で、
+      冷凍庫の霜取りとPCの夜間スリープで取り切れます。<br>
+      <b style="color:var(--sky)">洗濯乾燥機の ${S.settings.dryer} kWh/日（約${Math.round((+S.settings.dryer)*30)} kWh/月・${Math.round((+S.settings.dryer)*30*25.59).toLocaleString()}円/月）は戻せません。</b>
+      これは故障でも無駄でもなく、家事を減らすために払っているコストです。
+      効かせるとすれば乾燥フィルターと熱交換器の清掃で、目詰まりすると乾燥時間が延びて消費が跳ねます。
+    </div>`;
 }
 
 function renderMission(){
   const t=D.today();
   const items=[
     ["2026-09-07","サブ冷凍庫の霜の再発チェック","厚さ5mm超までの期間で判定。3か月以上→正常 / 2〜4週→パッキン / 1〜2週→機械の異常"],
-    ["2026-09-21","2026年9月分の検針（本命の判定）","9.3kWh/日以下なら霜取り成功、10.5前後なら効果なし"],
+    ["2026-09-21","2026年9月分の検針（本命の判定）","8.0前後なら霜取り成功 / 8.7前後なら効果なし / 7.3ならPCスリープも効いた"],
   ];
   const rows=items.map(([d,ttl,sub])=>{
     const n=D.diff(t,d);
@@ -1471,9 +1532,14 @@ function renderMission(){
       <div style="min-width:56px;text-align:center"><div style="font-size:16px;font-weight:900;color:${c}" class="num">${n<0?"済":n===0?"今日":n}</div><div style="font-size:9px;color:var(--tx3)">${n>0?"日後":""}</div></div>
       <div><div style="font-size:12.5px;font-weight:800;color:var(--tx)">${ttl}</div><div class="tiny" style="color:var(--tx3)">${sub}</div></div></div>`;
   }).join("");
-  $("#missionBox").innerHTML=rows+`<div class="tiny" style="margin-top:9px;color:var(--tx3)">
-    容疑者：①サブ冷凍庫 simplus SP-32LF1-SL の霜（+72kWh/月・最有力） ②常時稼働PC2台化（+32kWh/月・確定）。
-    メイン冷蔵庫 日立 R-S27AMV-1 はシロ確定。未解明が約30kWh/月 残っています。</div>`;
+  $("#missionBox").innerHTML=rows+`<div class="tiny" style="margin-top:9px;color:var(--tx3);line-height:1.65">
+    <b style="color:var(--rose)">判定ラインを2026年8月12日に改訂。</b>
+    旧値（10.5／9.3）は「2025年6月→9月の上振れ +2.39」を季節要因として 8.11 に足したものでしたが、
+    その +2.39 には7月下旬に入った洗濯乾燥機が紛れ込んでいました。素の季節上振れは <b>+0.62</b> です。<br><br>
+    <b style="color:var(--sky)">① ドラム式洗濯乾燥機（2025年7月下旬 導入）+53kWh/月</b> — 最大の要因。恒久的な底上げで、削減対象ではない。<br>
+    ② サブ冷凍庫 simplus SP-32LF1-SL の霜（+21kWh/月）— 2026年8月7日に霜取り済み、判定待ち。<br>
+    ③ 常時稼働PC 2台化（+32kWh/月）— 夜間スリープで削減可。<br>
+    メイン冷蔵庫 日立 R-S27AMV-1 はシロ確定。<b>この3つで前年同月比の増加はほぼ説明がつき、未解明分は解消しました。</b></div>`;
 }
 
 /* ==================================================================
@@ -1843,10 +1909,14 @@ function bind(){
   const st=S.settings;
   $("#stBase").value=st.base; $("#stTgt").value=st.target; $("#stAlert").value=st.alertMa;
   $("#stYoy").value=st.alertYoy; $("#stGap").value=st.gap; $("#stNorm").checked=!!st.norm;
-  $("#stTier3").value=st.tier3; $("#stName").value=st.name;
+  $("#stTier3").value=st.tier3; $("#stName").value=st.name; $("#stDryer").value=st.dryer;
+  const paintFloor=()=>{const f=$("#floorTx"); if(f) f.textContent=floorKwh()+" kWh/日"};
+  paintFloor();
   const bindS=(id,key,num)=>{ const el=$(id); el.onchange=()=>{ S.settings[key]=num?+el.value:(el.type==="checkbox"?el.checked:el.value); save(); renderAll() } };
   bindS("#stBase","base",1); bindS("#stTgt","target",1); bindS("#stAlert","alertMa",1); bindS("#stYoy","alertYoy",1);
   bindS("#stGap","gap"); bindS("#stNorm","norm"); bindS("#stTier3","tier3",1); bindS("#stName","name");
+  $("#stDryer").onchange=()=>{ S.settings.dryer=+$("#stDryer").value||0; save(); paintFloor(); renderAll() };
+  $("#stBase").addEventListener("change",paintFloor);
 
   $("#btnPic").onclick=()=>$("#filePic").click();
   $("#filePic").onchange=e=>{
@@ -1893,6 +1963,11 @@ function bind(){
 
 /* ---------- boot ---------- */
 load();
+/* 洗濯乾燥機の導入をイベントとして一度だけ記録する */
+if(!S.events.some(e=>e.tag==="appliance"&&/洗濯乾燥機/.test(e.desc||""))){
+  S.events.push({date:"2025-07-25",tag:"appliance",desc:"ドラム式洗濯乾燥機を導入（以降 約+1.77 kWh/日 の恒常的な底上げ）"});
+  save();
+}
 S.mascot.streak=streakOf();
 renderMascot();
 bind();
