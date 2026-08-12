@@ -628,6 +628,12 @@ details[open] summary:before{content:"▾ "}
       <div><button class="btn sub" id="syTest">接続テスト</button></div>
       <div><button class="btn sub" id="syRun">今すぐ同期</button></div>
     </div>
+    <div class="hr"></div>
+    <div class="tiny muted" style="margin-bottom:9px">URLと合言葉をまとめた<b>招待コード</b>。もう1台にはこれを貼るだけで設定が済みます。</div>
+    <div class="row">
+      <div><button class="btn sub" id="syInvCopy">招待コードをコピー</button></div>
+      <div><button class="btn sub" id="syInvPaste">招待コードを貼る</button></div>
+    </div>
     <div class="tiny" id="syncStat" style="padding:2px 2px 0"></div>
     <div class="hr"></div>
     <details><summary>セットアップの手順（5分・片方の端末だけで作業）</summary>
@@ -646,7 +652,16 @@ details[open] summary:before{content:"▾ "}
     }
   }
 }</div>
-          <button class="btn sub sm" id="syCopy" style="margin-top:7px">ルールをコピー</button></li>
+          <button class="btn sub sm" id="syCopy" style="margin-top:7px">ルールをコピー</button>
+          <div class="tiny muted" style="margin-top:8px">もしこのルールが拒否されたら、下の書き方でも構いません。
+            <b>&lt;合言葉&gt;</b> の部分を、生成した合言葉に置き換えてください（その1部屋だけを許可する、より厳しい設定です）。</div>
+          <div class="code">{
+  "rules": {
+    "rooms": {
+      "&lt;合言葉&gt;": { ".read": true, ".write": true }
+    }
+  }
+}</div></li>
         <li>上の「生成」で合言葉を作り、「記録を同期する」をオンにして<b>接続テスト</b>。</li>
         <li><b>もう1台でも同じ URL と合言葉</b>を入力し、表示名だけ変えてオンにします。これで双方向に反映されます。</li>
       </ol>
@@ -2024,6 +2039,22 @@ function syncStart(){
   }catch(e){ SYNC.es=null }
   SYNC.poll=setInterval(()=>syncNow(true),60000);
 }
+/* 招待コード: URL と合言葉を1つの文字列にまとめる。もう1台へはこれを渡すだけでよい */
+function inviteMake(){
+  const c=syncCfg();
+  if(!c.url||!c.room) return "";
+  const j=JSON.stringify({u:c.url,r:c.room});
+  return "denki1."+btoa(unescape(encodeURIComponent(j))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+}
+function inviteRead(code){
+  const t=String(code||"").trim().replace(/\s+/g,"");
+  if(!t.startsWith("denki1.")) throw new Error("招待コードの形式が違います");
+  let b=t.slice(7).replace(/-/g,"+").replace(/_/g,"/");
+  while(b.length%4) b+="=";
+  const o=JSON.parse(decodeURIComponent(escape(atob(b))));
+  if(!o.u||!o.r) throw new Error("招待コードが壊れています");
+  return o;
+}
 function genRoom(){
   const a="abcdefghijkmnopqrstuvwxyz23456789";
   let o=""; const b=new Uint8Array(28);
@@ -2150,19 +2181,44 @@ function bind(){
     rd.readAsDataURL(f); e.target.value="";
   };
   /* 同期 */
-  const sy=S.settings.sync||(S.settings.sync={on:false,url:"",room:"",who:""});
-  $("#syOn").checked=!!sy.on; $("#syUrl").value=sy.url||""; $("#syRoom").value=sy.room||""; $("#syWho").value=sy.who||"";
+  if(!S.settings.sync) S.settings.sync={on:false,url:"",room:"",who:""};
+  const syFill=()=>{ const c=S.settings.sync;
+    $("#syOn").checked=!!c.on; $("#syUrl").value=c.url||""; $("#syRoom").value=c.room||""; $("#syWho").value=c.who||"" };
+  syFill();
+  /* S.settings.sync を差し替える（復元など）ことがあるので、毎回 S から読み書きする */
   const syApply=()=>{
-    sy.on=$("#syOn").checked; sy.url=$("#syUrl").value.trim();
-    sy.room=$("#syRoom").value.trim(); sy.who=$("#syWho").value.trim();
-    save(); $("#pSync").style.display=sy.on?"":"none";
-    if(sy.on) syncStart(); else syncStop();
+    S.settings.sync={ on:$("#syOn").checked, url:$("#syUrl").value.trim(),
+                      room:$("#syRoom").value.trim(), who:$("#syWho").value.trim() };
+    save(); $("#pSync").style.display=S.settings.sync.on?"":"none";
+    if(S.settings.sync.on) syncStart(); else syncStop();
     $("#syncStat").innerHTML=syncStatText();
   };
   ["#syOn","#syUrl","#syRoom","#syWho"].forEach(id=>$(id).addEventListener("change",syApply));
   $("#syGen").onclick=()=>{ $("#syRoom").value=genRoom(); syApply(); toast("合言葉を生成しました。もう1台にも同じ値を入れてください") };
   $("#syCopy").onclick=()=>{ navigator.clipboard.writeText($("#syRules").textContent).then(()=>toast("ルールをコピーしました"),()=>toast("コピーできませんでした")) };
   $("#syRun").onclick=()=>syncNow(false);
+  $("#syInvCopy").onclick=()=>{
+    const code=inviteMake();
+    if(!code) return toast("先にURLと合言葉を設定してください");
+    navigator.clipboard.writeText(code).then(
+      ()=>toast("招待コードをコピーしました。もう1台に貼ってください"),
+      ()=>prompt("これをコピーして、もう1台に貼ってください",code));
+  };
+  $("#syInvPaste").onclick=async()=>{
+    let code="";
+    try{ code=await navigator.clipboard.readText() }catch(e){}
+    if(!code||!code.trim().startsWith("denki1.")) code=prompt("招待コードを貼り付けてください")||"";
+    if(!code.trim()) return;
+    try{
+      const o=inviteRead(code);
+      $("#syUrl").value=o.u; $("#syRoom").value=o.r; $("#syOn").checked=true;
+      if(!$("#syWho").value.trim()){
+        const w=prompt("あなたの表示名（例: 夫 / 妻）","");
+        if(w&&w.trim()) $("#syWho").value=w.trim().slice(0,8);
+      }
+      syApply(); toast("設定しました。接続テストで確認してください");
+    }catch(e){ toast(e.message) }
+  };
   $("#syTest").onclick=async()=>{
     if(!syncReady()) return toast("URLと合言葉を確認してください（合言葉は20文字以上）");
     try{
