@@ -237,6 +237,25 @@ td:first-child,th:first-child{text-align:left}
 .scrollx{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -4px;padding:0 4px}
 
 
+/* ================= 同期 ================= */
+.pill.sy{background:rgba(255,255,255,.05);border-color:var(--line);color:var(--tx3);padding:4px 9px}
+.pill.sy.ok{background:rgba(74,222,128,.14);border-color:rgba(74,222,128,.34);color:#bbf7d0}
+.pill.sy.bad{background:rgba(251,113,133,.14);border-color:rgba(251,113,133,.34);color:#ffc2cc}
+.pill.sy.run{background:rgba(125,211,252,.14);border-color:rgba(125,211,252,.34);color:#c3e9ff}
+.pill.sy .d{width:6px;height:6px;border-radius:99px;background:currentColor}
+.pill.sy.run .d{animation:pulseDot .9s infinite}
+@keyframes pulseDot{0%,100%{opacity:1}50%{opacity:.25}}
+.by{font-size:9.5px;background:rgba(125,211,252,.18);color:#c3e9ff;border-radius:5px;padding:1px 5px;margin-left:5px;font-weight:800;vertical-align:1px}
+.step{counter-reset:st;display:flex;flex-direction:column;gap:10px;margin-top:10px}
+.step li{list-style:none;position:relative;padding-left:28px;font-size:12.5px;line-height:1.6;color:var(--tx2)}
+.step li:before{counter-increment:st;content:counter(st);position:absolute;left:0;top:1px;width:19px;height:19px;
+  border-radius:50%;background:rgba(255,225,77,.18);border:1px solid rgba(255,225,77,.4);color:#ffe98a;
+  font-size:10.5px;font-weight:900;display:grid;place-items:center}
+.step b{color:var(--tx)}
+.code{background:rgba(0,0,0,.42);border:1px solid var(--line);border-radius:10px;padding:10px 11px;
+  font-family:ui-monospace,Menlo,Consolas,monospace;font-size:10.5px;line-height:1.55;color:#cfe3ff;
+  overflow-x:auto;white-space:pre;margin-top:7px}
+
 /* ================= わざ演出 ================= */
 #fxLayer{position:fixed;inset:0;z-index:300;pointer-events:none;overflow:hidden}
 #fxLayer svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
@@ -341,6 +360,7 @@ details[open] summary:before{content:"▾ "}
   <div class="lvchip">
     <span class="pill lv" id="pLv">Lv.1</span>
     <span class="pill st" id="pSt">🔥0日</span>
+    <button class="pill sy" id="pSync" style="display:none"><span class="d"></span><span id="pSyncTx"></span></button>
   </div>
 </header>
 
@@ -588,6 +608,57 @@ details[open] summary:before{content:"▾ "}
     <label>名前</label><input type="text" id="stName" maxlength="12">
   </div>
 
+
+  <div class="card">
+    <h3><span class="dot"></span>ふたりで共有する</h3>
+    <label style="display:flex;align-items:center;gap:9px;color:var(--tx);font-size:13.5px;margin-bottom:11px">
+      <input type="checkbox" id="syOn" style="width:19px;height:19px;flex:none;padding:0">
+      記録を同期する
+    </label>
+    <label>データベースURL</label>
+    <input type="url" id="syUrl" placeholder="https://xxxx-default-rtdb.asia-southeast1.firebasedatabase.app" style="margin-bottom:11px">
+    <label>合言葉（20文字以上・2台で同じ値）</label>
+    <div class="row" style="margin-bottom:11px">
+      <div style="flex:2.6"><input type="text" id="syRoom" placeholder="生成ボタンを押してください"></div>
+      <div style="flex:1"><button class="btn sub" id="syGen" style="padding:11px">生成</button></div>
+    </div>
+    <label>あなたの表示名</label>
+    <input type="text" id="syWho" maxlength="8" placeholder="例: 夫 / 妻" style="margin-bottom:11px">
+    <div class="row" style="margin-bottom:11px">
+      <div><button class="btn sub" id="syTest">接続テスト</button></div>
+      <div><button class="btn sub" id="syRun">今すぐ同期</button></div>
+    </div>
+    <div class="tiny" id="syncStat" style="padding:2px 2px 0"></div>
+    <div class="hr"></div>
+    <details><summary>セットアップの手順（5分・片方の端末だけで作業）</summary>
+      <ol class="step">
+        <li><b>console.firebase.google.com</b> を開き、Googleアカウントでログインして「プロジェクトを作成」。名前は何でも構いません。Googleアナリティクスはオフで大丈夫です。</li>
+        <li>左メニューの <b>構築 → Realtime Database</b> を開き「データベースを作成」。ロケーションは <b>asia-southeast1</b>。セキュリティルールは<b>ロックモード</b>を選びます。</li>
+        <li>作成後に表示される <b>https://…firebasedatabase.app</b> という URL を、上の「データベースURL」に貼ります。</li>
+        <li><b>ルール</b>タブを開き、中身を下のルールに丸ごと差し替えて「公開」。合言葉が20文字以上のときだけ読み書きを許可する設定です。
+          <div class="code" id="syRules">{
+  "rules": {
+    "rooms": {
+      "$room": {
+        ".read":  "$room.length >= 20",
+        ".write": "$room.length >= 20"
+      }
+    }
+  }
+}</div>
+          <button class="btn sub sm" id="syCopy" style="margin-top:7px">ルールをコピー</button></li>
+        <li>上の「生成」で合言葉を作り、「記録を同期する」をオンにして<b>接続テスト</b>。</li>
+        <li><b>もう1台でも同じ URL と合言葉</b>を入力し、表示名だけ変えてオンにします。これで双方向に反映されます。</li>
+      </ol>
+      <div class="tiny muted" style="margin-top:11px;line-height:1.65">
+        このアプリのコードは公開リポジトリにありますが、<b>URLと合言葉はコードに含まれず、各端末の中にだけ保存されます</b>。
+        合言葉が鍵そのものなので、SNSなどに貼らないでください。漏れたときは新しい合言葉を生成して2台とも入れ替えてください。<br><br>
+        同じ日付を二人が入力した場合は、<b>あとから入力したほうが残ります</b>。誰が入れたかは記録一覧に表示されます。
+        読む時刻がばらつくと日次の差分が乱れるので、<b>どちらが読むかと、だいたいの時間帯だけは決めておく</b>ことをおすすめします。
+      </div>
+    </details>
+  </div>
+
   <div class="card">
     <h3><span class="dot"></span>データ</h3>
     <div class="grid2" style="gap:9px">
@@ -686,9 +757,10 @@ const SEED_BILLS=[
 ].map(r=>({month:r[0],start:r[1],end:r[2],days:r[3],kwh:r[4],amount:r[5],fuel:r[6],levy:r[7]}));
 
 const DEFAULTS={
-  readings:[], events:[], bills:SEED_BILLS,
+  readings:[], events:[], bills:SEED_BILLS, tomb:{},
   settings:{gap:"prorate",norm:false,base:4.2,target:6.8,alertMa:8.5,alertYoy:30,
-    tier3:28.86,fuel:2.97,levy:4.18,calm:null,mvName:{},dryer:1.77,pStart:"2026-07-22",pEnd:"2026-08-24",name:"ビリすけ",pic:null},
+    tier3:28.86,fuel:2.97,levy:4.18,calm:null,mvName:{},dryer:1.77,
+    sync:{on:false,url:"",room:"",who:""},pStart:"2026-07-22",pEnd:"2026-08-24",name:"ビリすけ",pic:null},
   mascot:{exp:0,lastLog:null,streak:0,best:0,total:0,volt:0,thunders:0}
 };
 
@@ -700,7 +772,13 @@ function load(){
     S = raw ? deepMerge(structuredClone(DEFAULTS), JSON.parse(raw)) : structuredClone(DEFAULTS);
   }catch(e){ S=structuredClone(DEFAULTS) }
   if(!S.bills||!S.bills.length) S.bills=structuredClone(SEED_BILLS);
+  if(!S.tomb) S.tomb={};
+  /* 同期のために、既存レコードへ id と更新時刻を付与する */
+  S.events.forEach(e=>{ if(!e.id) e.id=uid(); if(e.at==null) e.at=0 });
+  S.readings.forEach(r=>{ if(r.at==null) r.at=0 });
+  S.bills.forEach(b=>{ if(b.at==null) b.at=0 });
 }
+const uid=()=>Math.random().toString(36).slice(2,10)+Date.now().toString(36).slice(-4);
 function deepMerge(base,over){
   for(const k in over){
     if(over[k] && typeof over[k]==="object" && !Array.isArray(over[k]) && base[k]) deepMerge(base[k],over[k]);
@@ -708,7 +786,10 @@ function deepMerge(base,over){
   }
   return base;
 }
-function save(){ try{ localStorage.setItem(KEY,JSON.stringify(S)) }catch(e){ toast("保存に失敗しました（容量超過かも）") } }
+function save(){
+  try{ localStorage.setItem(KEY,JSON.stringify(S)) }catch(e){ toast("保存に失敗しました（容量超過かも）") }
+  if(typeof syncPushSoon==="function") syncPushSoon();
+}
 
 /* ---------- tariff (KABU&でんき / 関電 従量電灯A 相当) ---------- */
 function energyCharge(kwh,tier3){
@@ -1335,7 +1416,8 @@ function upsertReading(date,time,meter,quiet){
   const prev=[...S.readings].filter(r=>r.date<date).sort((a,b)=>a.date<b.date?-1:1).pop();
   const isNew=!S.readings.some(r=>r.date===date);
   S.readings=S.readings.filter(r=>r.date!==date);
-  S.readings.push({date,time,meter});
+  S.readings.push({date,time,meter,by:syncCfg().who||"",at:nowMs()});
+  delete S.tomb["r:"+date];
   S.readings.sort((a,b)=>a.date<b.date?-1:1);
 
   let fired=false;
@@ -1594,6 +1676,7 @@ function renderBillView(){
   }</tbody>`;
   $$(".delBill").forEach(b=>b.onclick=()=>{
     if(!confirm(b.dataset.m+" の請求実績を削除しますか？")) return;
+    S.tomb["b:"+b.dataset.m]=nowMs();
     S.bills=S.bills.filter(x=>x.month!==b.dataset.m); save(); renderAll(); toast("削除しました");
   });
   renderSim();
@@ -1759,7 +1842,7 @@ function renderLists(){
     const evs=S.events.filter(e=>e.date===r.date);
     return `<div class="item">
       <div class="d">${D.md(r.date)}<br><span style="color:var(--tx3);font-weight:600">${D.wd(r.date)} ${r.time||""}</span></div>
-      <div class="m">積算 <b class="num">${r.meter}</b> kWh
+      <div class="m">積算 <b class="num">${r.meter}</b> kWh${r.by?`<span class="by">${esc(r.by)}</span>`:""}
         ${evs.length?`<div class="sub" style="margin-top:2px">${evs.map(e=>`<span class="tag t-${e.tag}">${tagLabel(e.tag)}</span>`).join(" ")}</div>`:""}
       </div>
       <div class="kw num" style="color:${!o?"var(--tx3)":o.v<=S.settings.target?"var(--ok)":o.v>=S.settings.alertMa?"var(--rose)":"var(--sky)"}">
@@ -1769,6 +1852,7 @@ function renderLists(){
   $$(".delR").forEach(b=>b.onclick=()=>{
     if(!confirm(b.dataset.d+" の記録を削除しますか？")) return;
     S.readings=S.readings.filter(r=>r.date!==b.dataset.d);
+    S.tomb["r:"+b.dataset.d]=nowMs();
     S.mascot.streak=streakOf(); save(); renderAll(); toast("削除しました");
   });
 
@@ -1779,7 +1863,9 @@ function renderLists(){
         ${e.desc?`<div class="sub" style="margin-top:3px">${esc(e.desc)}</div>`:""}</div>
       <button class="x delE" data-i="${S.events.indexOf(e)}">×</button></div>`).join("")
     : `<div class="empty">イベントがまだありません<br><span class="tiny">エアコン使用・来客・霜取りなどを残しておくと、数字の説明がつきます</span></div>`;
-  $$(".delE").forEach(b=>b.onclick=()=>{ S.events.splice(+b.dataset.i,1); save(); renderAll(); toast("削除しました") });
+  $$(".delE").forEach(b=>b.onclick=()=>{ const ev=S.events[+b.dataset.i];
+    if(ev&&ev.id) S.tomb["e:"+ev.id]=nowMs();
+    S.events.splice(+b.dataset.i,1); save(); renderAll(); toast("削除しました") });
 }
 
 /* ==================================================================
@@ -1811,6 +1897,138 @@ function exportBills(){
   const rows=[["billing_month","period_start","period_end","days","kwh","kwh_per_day","amount","fuel_adjustment","renewable_levy"],
     ...[...S.bills].sort((a,b)=>a.month<b.month?-1:1).map(b=>[b.month,b.start,b.end,b.days,b.kwh,(b.kwh/b.days).toFixed(2),b.amount,b.fuel,b.levy])];
   dl("denki_bills.csv",rows.map(r=>r.map(q).join(",")).join("\r\n"));
+}
+
+
+/* ==================================================================
+   同期（Firebase Realtime Database / REST + SSE）
+   接続情報はコードに持たず、各端末の設定に保存する
+================================================================== */
+const SYNC={es:null,poll:null,busy:false,last:null,err:null,pushT:null};
+function syncCfg(){ const c=(S.settings.sync)||{}; return {on:!!c.on,url:(c.url||"").trim().replace(/\/+$/,""),room:(c.room||"").trim(),who:(c.who||"").trim()} }
+function syncReady(){ const c=syncCfg(); return c.on && /^https:\/\/[\w.-]+\.(firebasedatabase\.app|firebaseio\.com)$/i.test(c.url) && c.room.length>=20 }
+function syncBase(){ const c=syncCfg(); return c.url+"/rooms/"+encodeURIComponent(c.room) }
+const nowMs=()=>Date.now();
+
+function localPayload(){
+  const r={},e={},b={};
+  S.readings.forEach(x=>{ r[x.date]={meter:+x.meter,time:x.time||"",by:x.by||"",at:x.at||0} });
+  S.events.forEach(x=>{ if(!x.id) x.id=uid(); e[x.id]={date:x.date,tag:x.tag,desc:x.desc||"",by:x.by||"",at:x.at||0} });
+  S.bills.forEach(x=>{ b[x.month]={month:x.month,start:x.start,end:x.end,days:x.days,kwh:x.kwh,
+    amount:x.amount,fuel:x.fuel,levy:x.levy,at:x.at||0} });
+  return {readings:r,events:e,bills:b,tomb:S.tomb||{}};
+}
+/* 各キーについて、更新時刻の新しいほうを採用する。削除は墓標で伝える */
+function mergeRemote(d){
+  if(!d||typeof d!=="object") return false;
+  let ch=false;
+  const tomb=Object.assign({},S.tomb||{});
+  Object.entries(d.tomb||{}).forEach(([k,v])=>{ if((tomb[k]||0)<v){ tomb[k]=v; ch=true } });
+
+  const R={}; S.readings.forEach(x=>R[x.date]=x);
+  Object.entries(d.readings||{}).forEach(([k,v])=>{
+    if(!v||v.meter==null) return;
+    if(!R[k] || (v.at||0)>(R[k].at||0)){ R[k]={date:k,meter:+v.meter,time:v.time||"",by:v.by||"",at:v.at||0}; ch=true }
+  });
+  const E={}; S.events.forEach(x=>E[x.id]=x);
+  Object.entries(d.events||{}).forEach(([k,v])=>{
+    if(!v||!v.date) return;
+    if(!E[k] || (v.at||0)>(E[k].at||0)){ E[k]={id:k,date:v.date,tag:v.tag||"other",desc:v.desc||"",by:v.by||"",at:v.at||0}; ch=true }
+  });
+  const B={}; S.bills.forEach(x=>B[x.month]=x);
+  Object.entries(d.bills||{}).forEach(([k,v])=>{
+    if(!v||v.kwh==null) return;
+    if(!B[k] || (v.at||0)>(B[k].at||0)){ B[k]=Object.assign({},v,{month:k}); ch=true }
+  });
+  Object.entries(tomb).forEach(([k,at])=>{
+    const id=k.slice(2), t=k.slice(0,2);
+    if(t==="r:"&&R[id]&&at>(R[id].at||0)){ delete R[id]; ch=true }
+    if(t==="e:"&&E[id]&&at>(E[id].at||0)){ delete E[id]; ch=true }
+    if(t==="b:"&&B[id]&&at>(B[id].at||0)){ delete B[id]; ch=true }
+  });
+  if(ch){
+    S.tomb=tomb;
+    S.readings=Object.values(R).sort((a,b)=>a.date<b.date?-1:1);
+    S.events=Object.values(E).sort((a,b)=>a.date<b.date?-1:1);
+    S.bills=Object.values(B).sort((a,b)=>a.month<b.month?-1:1);
+    S.mascot.streak=streakOf();
+  }
+  return ch;
+}
+function syncStat(cls,tx){
+  SYNC.last=cls==="ok"?nowMs():SYNC.last;
+  const el=$("#pSync"); if(!el) return;
+  el.style.display=syncCfg().on?"":"none";
+  el.className="pill sy "+(cls||"");
+  $("#pSyncTx").textContent=tx;
+  const st=$("#syncStat"); if(st) st.innerHTML=syncStatText();
+}
+function syncStatText(){
+  const c=syncCfg();
+  if(!c.on) return '<span class="muted">同期はオフです。</span>';
+  if(!syncReady()) return '<span style="color:var(--volt2)">URLか合言葉が未設定です（合言葉は20文字以上）。</span>';
+  if(SYNC.err) return '<span style="color:var(--rose)">エラー: '+esc(SYNC.err)+'</span>';
+  if(!SYNC.last) return '<span class="muted">まだ同期していません。</span>';
+  const d=new Date(SYNC.last);
+  return '<span style="color:var(--ok)">✓ 最終同期 '+p2(d.getHours())+":"+p2(d.getMinutes())+":"+p2(d.getSeconds())+
+    '</span>　<span class="muted">'+(SYNC.es?"リアルタイム受信中":"1分ごとに確認")+'</span>';
+}
+async function syncPull(){
+  if(!syncReady()) return false;
+  const res=await fetch(syncBase()+".json",{cache:"no-store"});
+  if(!res.ok) throw new Error("HTTP "+res.status+(res.status===401||res.status===403?"（ルールで拒否されました）":""));
+  const d=await res.json();
+  return mergeRemote(d);
+}
+async function syncPush(){
+  if(!syncReady()) return;
+  const p=localPayload(), b=syncBase();
+  for(const k of ["readings","events","bills","tomb"]){
+    const body=JSON.stringify(p[k]||{});
+    if(body==="{}") continue;
+    const res=await fetch(b+"/"+k+".json",{method:"PATCH",headers:{"Content-Type":"application/json"},body});
+    if(!res.ok) throw new Error("HTTP "+res.status);
+  }
+}
+async function syncNow(quiet){
+  if(!syncReady()||SYNC.busy) return;
+  SYNC.busy=true; SYNC.err=null; syncStat("run","同期中");
+  try{
+    const ch=await syncPull();
+    await syncPush();
+    SYNC.err=null; SYNC.busy=false; syncStat("ok","同期");
+    if(ch){ save(); renderAll(); if(!quiet) toast("相手の記録を取り込みました") }
+    else save();
+  }catch(e){
+    SYNC.busy=false; SYNC.err=e.message||String(e); syncStat("bad","同期エラー");
+    if(!quiet) toast("同期に失敗: "+SYNC.err);
+  }
+}
+function syncPushSoon(){ if(!syncReady()) return; clearTimeout(SYNC.pushT); SYNC.pushT=setTimeout(()=>syncNow(true),1200) }
+function syncStop(){
+  if(SYNC.es){ try{SYNC.es.close()}catch(e){} SYNC.es=null }
+  if(SYNC.poll){ clearInterval(SYNC.poll); SYNC.poll=null }
+  syncStat("","同期オフ");
+}
+function syncStart(){
+  syncStop();
+  if(!syncReady()){ syncStat(syncCfg().on?"bad":"","未設定"); return }
+  syncNow(true);
+  /* Firebase の REST は EventSource でそのまま購読できる */
+  try{
+    SYNC.es=new EventSource(syncBase()+".json");
+    const on=()=>{ if(!SYNC.busy) syncPull().then(ch=>{ if(ch){save();renderAll();syncStat("ok","同期")} }).catch(()=>{}) };
+    SYNC.es.addEventListener("put",on);
+    SYNC.es.addEventListener("patch",on);
+    SYNC.es.onerror=()=>{ if(SYNC.es){try{SYNC.es.close()}catch(e){} SYNC.es=null} };
+  }catch(e){ SYNC.es=null }
+  SYNC.poll=setInterval(()=>syncNow(true),60000);
+}
+function genRoom(){
+  const a="abcdefghijkmnopqrstuvwxyz23456789";
+  let o=""; const b=new Uint8Array(28);
+  (crypto.getRandomValues?crypto.getRandomValues(b):b).forEach(x=>o+=a[x%a.length]);
+  return o;
 }
 
 /* ==================================================================
@@ -1886,7 +2104,7 @@ function bind(){
   });
   $("#evAdd").onclick=()=>{
     const d=$("#evDate").value; if(!d) return toast("日付を入れてください");
-    S.events.push({date:d,tag:evTag,desc:$("#evDesc").value.trim()});
+    S.events.push({id:uid(),date:d,tag:evTag,desc:$("#evDesc").value.trim(),by:syncCfg().who||"",at:nowMs()});
     save(); $("#evDesc").value=""; renderAll(); toast("イベントを追加しました"); sparkBurst(8);
   };
 
@@ -1899,7 +2117,8 @@ function bind(){
     if(!mo||!s||!e||!k) return toast("請求月・期間・kWh は必須です");
     const days=D.diff(s,e)+1;
     S.bills=S.bills.filter(b=>b.month!==mo);
-    S.bills.push({month:mo,start:s,end:e,days,kwh:k,amount:+$("#bAmt").value||0,fuel:+$("#bFuel").value||0,levy:+$("#bLevy").value||0});
+    S.bills.push({month:mo,start:s,end:e,days,kwh:k,amount:+$("#bAmt").value||0,fuel:+$("#bFuel").value||0,levy:+$("#bLevy").value||0,at:nowMs()});
+    delete S.tomb["b:"+mo];
     save(); renderAll(); toast(mo+" を追加しました（"+(k/days).toFixed(2)+" kWh/日）"); sparkBurst(10);
     ["#bMonth","#bStart","#bEnd","#bKwh","#bAmt","#bFuel","#bLevy"].forEach(x=>$(x).value="");
   };
@@ -1930,6 +2149,31 @@ function bind(){
     }; img.src=rd.result };
     rd.readAsDataURL(f); e.target.value="";
   };
+  /* 同期 */
+  const sy=S.settings.sync||(S.settings.sync={on:false,url:"",room:"",who:""});
+  $("#syOn").checked=!!sy.on; $("#syUrl").value=sy.url||""; $("#syRoom").value=sy.room||""; $("#syWho").value=sy.who||"";
+  const syApply=()=>{
+    sy.on=$("#syOn").checked; sy.url=$("#syUrl").value.trim();
+    sy.room=$("#syRoom").value.trim(); sy.who=$("#syWho").value.trim();
+    save(); $("#pSync").style.display=sy.on?"":"none";
+    if(sy.on) syncStart(); else syncStop();
+    $("#syncStat").innerHTML=syncStatText();
+  };
+  ["#syOn","#syUrl","#syRoom","#syWho"].forEach(id=>$(id).addEventListener("change",syApply));
+  $("#syGen").onclick=()=>{ $("#syRoom").value=genRoom(); syApply(); toast("合言葉を生成しました。もう1台にも同じ値を入れてください") };
+  $("#syCopy").onclick=()=>{ navigator.clipboard.writeText($("#syRules").textContent).then(()=>toast("ルールをコピーしました"),()=>toast("コピーできませんでした")) };
+  $("#syRun").onclick=()=>syncNow(false);
+  $("#syTest").onclick=async()=>{
+    if(!syncReady()) return toast("URLと合言葉を確認してください（合言葉は20文字以上）");
+    try{
+      const r=await fetch(syncBase()+"/_ping.json",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(nowMs())});
+      if(!r.ok) throw new Error("HTTP "+r.status+(r.status===401||r.status===403?"（ルールを公開したか確認してください）":""));
+      toast("接続できました"); SYNC.err=null; syncStat("ok","同期"); syncNow(true);
+    }catch(e){ SYNC.err=e.message; syncStat("bad","同期エラー"); toast("つながりません: "+e.message) }
+  };
+  $("#syncStat").innerHTML=syncStatText();
+  $("#pSync").onclick=()=>{ go("set"); setTimeout(()=>$("#syncStat").scrollIntoView({block:"center",behavior:"smooth"}),120) };
+
   $("#wazaBtn").onclick=openWaza;
   $$("#wazaSheet [data-close]").forEach(el=>el.onclick=closeWaza);
   addEventListener("keydown",e=>{ if(e.key==="Escape") closeWaza() });
@@ -1965,7 +2209,7 @@ function bind(){
 load();
 /* 洗濯乾燥機の導入をイベントとして一度だけ記録する */
 if(!S.events.some(e=>e.tag==="appliance"&&/洗濯乾燥機/.test(e.desc||""))){
-  S.events.push({date:"2025-07-25",tag:"appliance",desc:"ドラム式洗濯乾燥機を導入（以降 約+1.77 kWh/日 の恒常的な底上げ）"});
+  S.events.push({id:"seed-dryer-2025",date:"2025-07-25",tag:"appliance",at:1,by:"",desc:"ドラム式洗濯乾燥機を導入（以降 約+1.77 kWh/日 の恒常的な底上げ）"});
   save();
 }
 S.mascot.streak=streakOf();
@@ -1975,7 +2219,8 @@ renderAll();
 livePredict();
 if("serviceWorker" in navigator && location.protocol==="https:")
   addEventListener("load",()=>navigator.serviceWorker.register("./sw.js").catch(()=>{}));
-document.addEventListener("visibilitychange",()=>{ if(!document.hidden){ S.mascot.streak=streakOf(); renderAll() } });
+if(S.settings.sync&&S.settings.sync.on){ $("#pSync").style.display=""; syncStart() }
+document.addEventListener("visibilitychange",()=>{ if(!document.hidden){ S.mascot.streak=streakOf(); renderAll(); syncNow(true) } });
 </script>
 </body>
 </html>
