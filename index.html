@@ -635,6 +635,11 @@ details[open] summary:before{content:"▾ "}
       <div><button class="btn sub" id="syInvPaste">招待コードを貼る</button></div>
     </div>
     <div class="tiny" id="syncStat" style="padding:2px 2px 0"></div>
+    <div class="tiny muted" style="margin-top:9px;line-height:1.6">
+      共有されるのは<b>記録・イベント・請求実績</b>と、<b>計算と判定に関わる設定</b>（欠測日の扱い、時刻の正規化、基準値、料金の単価、検針期間）です。
+      二人が同じ数字を見られるように揃えています。<br>
+      マスコットの名前や画像、わざの名前、演出の強さ、表示名は<b>端末ごと</b>で、相手には影響しません。
+    </div>
     <div class="hr"></div>
     <details><summary>セットアップの手順（5分・片方の端末だけで作業）</summary>
       <ol class="step">
@@ -772,7 +777,7 @@ const SEED_BILLS=[
 ].map(r=>({month:r[0],start:r[1],end:r[2],days:r[3],kwh:r[4],amount:r[5],fuel:r[6],levy:r[7]}));
 
 const DEFAULTS={
-  readings:[], events:[], bills:SEED_BILLS, tomb:{},
+  readings:[], events:[], bills:SEED_BILLS, tomb:{}, setAt:{},
   settings:{gap:"prorate",norm:false,base:4.2,target:6.8,alertMa:8.5,alertYoy:30,
     tier3:28.86,fuel:2.97,levy:4.18,calm:null,mvName:{},dryer:1.77,
     sync:{on:false,url:"",room:"",who:""},pStart:"2026-07-22",pEnd:"2026-08-24",name:"ビリすけ",pic:null},
@@ -788,6 +793,7 @@ function load(){
   }catch(e){ S=structuredClone(DEFAULTS) }
   if(!S.bills||!S.bills.length) S.bills=structuredClone(SEED_BILLS);
   if(!S.tomb) S.tomb={};
+  if(!S.setAt) S.setAt={};
   /* 同期のために、既存レコードへ id と更新時刻を付与する */
   S.events.forEach(e=>{ if(!e.id) e.id=uid(); if(e.at==null) e.at=0 });
   S.readings.forEach(r=>{ if(r.at==null) r.at=0 });
@@ -1920,6 +1926,13 @@ function exportBills(){
    接続情報はコードに持たず、各端末の設定に保存する
 ================================================================== */
 const SYNC={es:null,poll:null,busy:false,last:null,err:null,pushT:null};
+/* 二人が同じ数字を見るために、計算と判定に関わる設定は共有する。
+   マスコットや演出などの見た目の好みは端末ごとに残す */
+const SHARED_SET=["gap","norm","base","target","alertMa","alertYoy","tier3","fuel","levy","pStart","pEnd","dryer"];
+function setShared(key,val){
+  S.settings[key]=val;
+  S.setAt=S.setAt||{}; S.setAt[key]=nowMs();
+}
 function syncCfg(){ const c=(S.settings.sync)||{}; return {on:!!c.on,url:(c.url||"").trim().replace(/\/+$/,""),room:(c.room||"").trim(),who:(c.who||"").trim()} }
 function syncReady(){ const c=syncCfg(); return c.on && /^https:\/\/[\w.-]+\.(firebasedatabase\.app|firebaseio\.com)$/i.test(c.url) && c.room.length>=20 }
 function syncBase(){ const c=syncCfg(); return c.url+"/rooms/"+encodeURIComponent(c.room) }
@@ -1931,7 +1944,9 @@ function localPayload(){
   S.events.forEach(x=>{ if(!x.id) x.id=uid(); e[x.id]={date:x.date,tag:x.tag,desc:x.desc||"",by:x.by||"",at:x.at||0} });
   S.bills.forEach(x=>{ b[x.month]={month:x.month,start:x.start,end:x.end,days:x.days,kwh:x.kwh,
     amount:x.amount,fuel:x.fuel,levy:x.levy,at:x.at||0} });
-  return {readings:r,events:e,bills:b,tomb:S.tomb||{}};
+  const st={}; const at=S.setAt||{};
+  SHARED_SET.forEach(k=>{ if(S.settings[k]!==undefined) st[k]={v:S.settings[k],at:at[k]||0} });
+  return {readings:r,events:e,bills:b,tomb:S.tomb||{},settings:st};
 }
 /* 各キーについて、更新時刻の新しいほうを採用する。削除は墓標で伝える */
 function mergeRemote(d){
@@ -1961,6 +1976,14 @@ function mergeRemote(d){
     if(t==="e:"&&E[id]&&at>(E[id].at||0)){ delete E[id]; ch=true }
     if(t==="b:"&&B[id]&&at>(B[id].at||0)){ delete B[id]; ch=true }
   });
+  const at=Object.assign({},S.setAt||{});
+  let setCh=false;
+  Object.entries(d.settings||{}).forEach(([k,o])=>{
+    if(!SHARED_SET.includes(k)||!o||o.v===undefined) return;
+    if((o.at||0)>(at[k]||0)){ S.settings[k]=o.v; at[k]=o.at||0; setCh=true }
+  });
+  if(setCh){ S.setAt=at; ch=true; if(typeof refreshSettingsUI==="function") refreshSettingsUI() }
+
   if(ch){
     S.tomb=tomb;
     S.readings=Object.values(R).sort((a,b)=>a.date<b.date?-1:1);
@@ -1998,7 +2021,7 @@ async function syncPull(){
 async function syncPush(){
   if(!syncReady()) return;
   const p=localPayload(), b=syncBase();
-  for(const k of ["readings","events","bills","tomb"]){
+  for(const k of ["readings","events","bills","tomb","settings"]){
     const body=JSON.stringify(p[k]||{});
     if(body==="{}") continue;
     const res=await fetch(b+"/"+k+".json",{method:"PATCH",headers:{"Content-Type":"application/json"},body});
@@ -2140,9 +2163,9 @@ function bind(){
   };
 
   /* bill */
-  const sset=(id,key,num)=>{ const el=$(id); el.onchange=()=>{ S.settings[key]=num?+el.value:el.value; save(); renderAll() } };
+  const sset=(id,key,num)=>{ const el=$(id); el.onchange=()=>{ setShared(key,num?+el.value:el.value); save(); renderAll() } };
   sset("#pStart","pStart"); sset("#pEnd","pEnd"); sset("#fuelRate","fuel",1); sset("#levyRate","levy",1);
-  $$(".fp").forEach(b=>b.onclick=()=>{ S.settings.fuel=+b.dataset.v; save(); renderBillView(); renderHome(); toast("燃調を "+b.dataset.v+" 円/kWh にしました") });
+  $$(".fp").forEach(b=>b.onclick=()=>{ setShared("fuel",+b.dataset.v); save(); renderBillView(); renderHome(); toast("燃調を "+b.dataset.v+" 円/kWh にしました") });
   $("#bAdd").onclick=()=>{
     const mo=$("#bMonth").value, s=$("#bStart").value, e=$("#bEnd").value, k=+$("#bKwh").value;
     if(!mo||!s||!e||!k) return toast("請求月・期間・kWh は必須です");
@@ -2162,10 +2185,13 @@ function bind(){
   $("#stTier3").value=st.tier3; $("#stName").value=st.name; $("#stDryer").value=st.dryer;
   const paintFloor=()=>{const f=$("#floorTx"); if(f) f.textContent=floorKwh()+" kWh/日"};
   paintFloor();
-  const bindS=(id,key,num)=>{ const el=$(id); el.onchange=()=>{ S.settings[key]=num?+el.value:(el.type==="checkbox"?el.checked:el.value); save(); renderAll() } };
+  const bindS=(id,key,num)=>{ const el=$(id); el.onchange=()=>{
+    const v=num?+el.value:(el.type==="checkbox"?el.checked:el.value);
+    if(SHARED_SET.includes(key)) setShared(key,v); else S.settings[key]=v;
+    save(); renderAll() } };
   bindS("#stBase","base",1); bindS("#stTgt","target",1); bindS("#stAlert","alertMa",1); bindS("#stYoy","alertYoy",1);
   bindS("#stGap","gap"); bindS("#stNorm","norm"); bindS("#stTier3","tier3",1); bindS("#stName","name");
-  $("#stDryer").onchange=()=>{ S.settings.dryer=+$("#stDryer").value||0; save(); paintFloor(); renderAll() };
+  $("#stDryer").onchange=()=>{ setShared("dryer",+$("#stDryer").value||0); save(); paintFloor(); renderAll() };
   $("#stBase").addEventListener("change",paintFloor);
 
   $("#btnPic").onclick=()=>$("#filePic").click();
@@ -2226,6 +2252,17 @@ function bind(){
       if(!r.ok) throw new Error("HTTP "+r.status+(r.status===401||r.status===403?"（ルールを公開したか確認してください）":""));
       toast("接続できました"); SYNC.err=null; syncStat("ok","同期"); syncNow(true);
     }catch(e){ SYNC.err=e.message; syncStat("bad","同期エラー"); toast("つながりません: "+e.message) }
+  };
+  window.refreshSettingsUI=()=>{
+    const c=S.settings;
+    $("#stBase").value=c.base; $("#stTgt").value=c.target; $("#stAlert").value=c.alertMa;
+    $("#stYoy").value=c.alertYoy; $("#stGap").value=c.gap; $("#stNorm").checked=!!c.norm;
+    $("#stTier3").value=c.tier3; $("#stDryer").value=c.dryer;
+    if($("#pStart")) $("#pStart").value=c.pStart;
+    if($("#pEnd")) $("#pEnd").value=c.pEnd;
+    if($("#fuelRate")) $("#fuelRate").value=c.fuel;
+    if($("#levyRate")) $("#levyRate").value=c.levy;
+    if($("#floorTx")) $("#floorTx").textContent=floorKwh()+" kWh/日";
   };
   $("#syncStat").innerHTML=syncStatText();
   $("#pSync").onclick=()=>{ go("set"); setTimeout(()=>$("#syncStat").scrollIntoView({block:"center",behavior:"smooth"}),120) };
