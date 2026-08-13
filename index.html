@@ -225,6 +225,7 @@ section.view.on{display:block}
 .t-pc{background:rgba(167,139,250,.22);color:#d6c7ff}
 .t-appliance{background:rgba(255,176,32,.2);color:#ffdb9b}
 .t-dry{background:rgba(94,234,212,.22);color:#b6f5ea}
+.t-clean{background:rgba(190,242,100,.22);color:#e3f7b0}
 .t-away{background:rgba(148,163,184,.22);color:#dbe3ef}
 .t-other{background:rgba(255,255,255,.13);color:#d7dcea}
 .chips{display:flex;flex-wrap:wrap;gap:7px}
@@ -493,7 +494,7 @@ details[open] summary:before{content:"▾ "}
       <div class="row" style="margin-bottom:10px"><div><label>日付</label><input type="date" id="evDate"></div></div>
       <label>タグ</label>
       <div class="chips" id="evTags" style="margin-bottom:11px">
-        <button data-t="dry" class="on">🌀 乾燥機</button><button data-t="aircon">❄️ エアコン</button><button data-t="guest">👥 来客</button>
+        <button data-t="dry" class="on">🌀 乾燥機</button><button data-t="clean">🧽 清掃・メンテ</button><button data-t="aircon">❄️ エアコン</button><button data-t="guest">👥 来客</button>
         <button data-t="away">✈️ 外泊/不在</button><button data-t="defrost">🧊 霜取り</button>
         <button data-t="pc">💻 PC</button><button data-t="appliance">🔌 家電</button><button data-t="other">📝 その他</button>
       </div>
@@ -1595,6 +1596,27 @@ function renderTarget(m,dates){
      ${base} には戻りません。</div>`;
 }
 
+/* 🧽 清掃・メンテ の記録を境に、乾燥1回あたりが変わったかを見る */
+function dryerBeforeAfter(){
+  const cl=S.events.filter(e=>e.tag==="clean").map(e=>e.date).sort();
+  if(!cl.length) return `<div class="tiny" style="color:var(--tx3);margin-top:8px;line-height:1.6">
+    乾燥フィルターと熱交換器を清掃したら、イベントに <b>🧽 清掃・メンテ</b> を記録してください。
+    その前後で1回あたりがどれだけ変わったかを、ここに出します。</div>`;
+  const d0=cl[cl.length-1];
+  const m=series(), dry=new Set(S.events.filter(e=>e.tag==="dry").map(e=>e.date));
+  const pick=f=>{const a=[];m.forEach((o,d)=>{ if(!o.est&&dry.has(d)&&f(d)) a.push(o.v) });return a};
+  const b=pick(d=>d<d0), a=pick(d=>d>d0);
+  const avg=x=>x.reduce((p,q)=>p+q,0)/x.length;
+  if(b.length<3||a.length<3) return `<div class="tiny" style="color:var(--tx3);margin-top:8px;line-height:1.6">
+    ${d0} に清掃を記録済み。前後それぞれ3日ぶんの乾燥日がたまると効果を出します（今 前${b.length}日／後${a.length}日）。</div>`;
+  const dd=avg(b)-avg(a);
+  return `<div class="tiny" style="margin-top:8px;padding:8px 10px;border-radius:10px;background:rgba(190,242,100,.10);border:1px solid rgba(190,242,100,.3);line-height:1.6">
+    <b style="color:#e3f7b0">🧽 ${d0} の清掃の前後</b>：乾燥日の平均 ${avg(b).toFixed(2)} → ${avg(a).toFixed(2)} kWh／日
+    （<b style="color:${dd>0.15?"var(--ok)":"var(--tx2)"}">${dd>0?"−":"+"}${Math.abs(dd).toFixed(2)}</b>）。
+    ${dd>0.15?`毎日回すなら月 約${Math.round(dd*30*25.59).toLocaleString()}円の削減。清掃は効いています。`
+      :dd<-0.15?"むしろ増えています。清掃以外の要因（気温・洗濯量）を疑ってください。":"有意な差は出ていません。"}</div>`;
+}
+
 /* 乾燥機を回した日と回さなかった日の平均差 ＝ 1回あたりの実測値。
    按分で埋めた推定日は、その日に回したか分からないので除く */
 function dryerMeasure(){
@@ -1638,6 +1660,21 @@ function renderBreakdown(){
     ${dryerBox()}`;
 }
 
+/* 乾燥機を回さなかった日は「それ以外すべて」の健康診断になる */
+function baseDayBox(){
+  const d=dryerMeasure();
+  if(d.a0==null||d.n0<2) return "";
+  const exp=5.96;                       // 8月・霜なし・PC7時間停止 の期待値
+  const v=d.a0, dv=v-exp;
+  const judge = dv<=0.25 ? ["#bbf7d0","霜取りもPC停止も効いています。想定どおりの水準です。"]
+              : dv<=0.55 ? ["#ffdb9b","わずかに高めです。まだ日数が少ないので様子を見てください。"]
+              : ["#ffc2cc","想定より高すぎます。冷凍庫の霜が戻っているか、PCが落ちていない可能性があります。"];
+  return `<div class="tiny" style="margin-top:8px;padding:8px 10px;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid var(--line);line-height:1.6">
+    <b>乾燥機を回さなかった日の平均 ${v.toFixed(2)} kWh</b>（期待値 ${exp}）
+    <span style="color:${judge[0]}">${dv>0?"+":""}${dv.toFixed(2)} — ${judge[1]}</span><br>
+    <span style="color:var(--tx3)">この数字が冷凍庫とPCの通信簿です。乾燥機の影響を受けないので、対策の効き目を直接見られます。</span></div>`;
+}
+
 function dryerBox(){
   const d=dryerMeasure();
   const need=(n,k)=>Math.max(0,3-n);
@@ -1649,9 +1686,10 @@ function dryerBox(){
         記録するとき「🌀 きょう乾燥機を回した」を押しておくと、回した日と回さなかった日の差から実測できます。<br>
         いま <b>回した日 ${d.n1}日</b>／<b>回さなかった日 ${d.n0}日</b>。
         それぞれ3日ぶんたまると結果が出ます（あと ${need(d.n1)}日 と ${need(d.n0)}日）。
-      </div></div>`;
+      </div>${baseDayBox()}</div>`;
   }
   const per=d.diff, month=per*30;
+  const ba=dryerBeforeAfter();
   return `<div style="margin-top:12px;padding:11px 12px;border-radius:13px;background:rgba(94,234,212,.10);border:1px solid rgba(94,234,212,.34)">
     <div style="font-size:12.5px;font-weight:800;color:#b6f5ea">🌀 乾燥機の実測値</div>
     <div class="grid3" style="gap:8px;margin-top:8px">
@@ -1661,17 +1699,18 @@ function dryerBox(){
     </div>
     <div class="tiny" style="color:var(--tx2);margin-top:8px;line-height:1.6">
       1回 <b>${per.toFixed(2)} kWh（約${Math.round(per*25.59)}円）</b>。毎日回せば月 ${Math.round(month)} kWh・約${Math.round(month*25.59).toLocaleString()}円。
-      ${per>=2.2?"<b style='color:var(--volt2)'>2.2kWhを超えています。ヒーター式か、フィルターの目詰まりが疑われます。乾燥フィルターと熱交換器の清掃で下がる可能性があります。</b>"
+      ${per>=2.2?"<b style='color:var(--volt2)'>2.2kWhを超えています。ヒーター式か、フィルターと熱交換器の目詰まりが疑われます。</b>"
        :per<=1.2?"ヒートポンプ式として良好な水準です。これ以上の削減余地は小さいでしょう。"
-       :"標準的な範囲です。フィルター清掃前後で比べると、目詰まりの影響が見えます。"}
-    </div></div>`;
+       :"標準的な範囲です。"}
+      ${per>1.77?` 請求実績から出した平均 1.77 を <b style="color:var(--volt2)">${(per-1.77).toFixed(2)} 上回っています</b>。乾燥性能が落ちて運転が延びている可能性があります。`:""}
+    </div>${ba}${baseDayBox()}</div>`;
 }
 
 function renderMission(){
   const t=D.today();
   const items=[
     ["2026-09-07","サブ冷凍庫の霜の再発チェック","厚さ5mm超までの期間で判定。3か月以上→正常 / 2〜4週→パッキン / 1〜2週→機械の異常"],
-    ["2026-09-21","2026年9月分の検針（本命の判定）","8.0前後なら霜取り成功 / 8.7前後なら効果なし / 7.3ならPCスリープも効いた"],
+    ["2026-09-21","2026年9月分の検針（本命の判定）","8.7=対策なし / 8.0=霜取り成功 / 7.7=PC夜間停止も効いた / 7.3=乾燥機の清掃も奏功"],
   ];
   const rows=items.map(([d,ttl,sub])=>{
     const n=D.diff(t,d);
@@ -1686,7 +1725,8 @@ function renderMission(){
     その +2.39 には7月下旬に入った洗濯乾燥機が紛れ込んでいました。素の季節上振れは <b>+0.62</b> です。<br><br>
     <b style="color:var(--sky)">① ドラム式洗濯乾燥機（2025年7月下旬 導入）+53kWh/月</b> — 最大の要因。恒久的な底上げで、削減対象ではない。<br>
     ② サブ冷凍庫 simplus SP-32LF1-SL の霜（+21kWh/月）— 2026年8月7日に霜取り済み、判定待ち。<br>
-    ③ 常時稼働PC 2台化（+32kWh/月）— 夜間スリープで削減可。<br>
+    ③ 常時稼働PC 2台化（+32kWh/月）— 2026年8月10日頃から0〜7時にシャットダウン中。
+    削減は <b>月9kWh・約240円</b>（引き継ぎ書の「月21kWh」は約2倍の過大評価だった）。<br>
     メイン冷蔵庫 日立 R-S27AMV-1 はシロ確定。<b>この3つで前年同月比の増加はほぼ説明がつき、未解明分は解消しました。</b></div>`;
 }
 
@@ -1897,7 +1937,7 @@ function renderChartYoy(){
 /* ==================================================================
    LISTS
 ================================================================== */
-const TAGS={dry:"🌀 乾燥機",aircon:"❄️ エアコン",guest:"👥 来客",away:"✈️ 不在",defrost:"🧊 霜取り",pc:"💻 PC",appliance:"🔌 家電",other:"📝 その他"};
+const TAGS={dry:"🌀 乾燥機",clean:"🧽 清掃・メンテ",aircon:"❄️ エアコン",guest:"👥 来客",away:"✈️ 不在",defrost:"🧊 霜取り",pc:"💻 PC",appliance:"🔌 家電",other:"📝 その他"};
 const tagLabel=t=>TAGS[t]||t;
 
 function renderLists(){
