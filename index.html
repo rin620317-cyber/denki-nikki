@@ -400,7 +400,7 @@ details[open] summary:before{content:"▾ "}
       <span class="unit">kWh</span>
     </div>
     <div class="pred" id="predLine"><span class="muted tiny">前回の値との差から自動計算します</span></div>
-    <div class="chips" style="margin-top:11px"><button id="dryTgl" type="button">🌀 きょう乾燥機を回した</button></div>
+    <div class="chips" style="margin-top:11px"><button id="dryTgl" type="button">🌀 乾燥機 まわしてない</button></div>
     <div style="margin-top:11px"><button class="btn" id="btnSave">⚡ 記録する</button></div>
     <div class="tiny muted" id="lastRead" style="margin-top:9px;text-align:center"></div>
   </div>
@@ -1607,7 +1607,7 @@ function dryerBeforeAfter(){
     その前後で1回あたりがどれだけ変わったかを、ここに出します。</div>`;
   const d0=cl[cl.length-1];
   const m=series(), dry=new Set(S.events.filter(e=>e.tag==="dry").map(e=>e.date));
-  const pick=f=>{const a=[];m.forEach((o,d)=>{ if(!o.est&&dry.has(d)&&f(d)) a.push(o.v) });return a};
+  const pick=f=>{const a=[];m.forEach((o,d)=>{ if(!o.est&&dry.has(d)&&f(d)) a.push(o.v/Math.max(1,dryCountOf(d))) });return a};
   const b=pick(d=>d<d0), a=pick(d=>d>d0);
   const avg=x=>x.reduce((p,q)=>p+q,0)/x.length;
   if(b.length<3||a.length<3) return `<div class="tiny" style="color:var(--tx3);margin-top:8px;line-height:1.6">
@@ -1622,15 +1622,26 @@ function dryerBeforeAfter(){
 
 /* 乾燥機を回した日と回さなかった日の平均差 ＝ 1回あたりの実測値。
    按分で埋めた推定日は、その日に回したか分からないので除く */
+function dryCountOf(date){
+  const e=S.events.find(x=>x.tag==="dry"&&x.date===date);
+  return e ? (e.n||1) : 0;
+}
 function dryerMeasure(){
-  const m=series(), dry=new Set(S.events.filter(e=>e.tag==="dry").map(e=>e.date));
+  const m=series();
   const on=[],off=[];
-  m.forEach((o,d)=>{ if(o.est) return; (dry.has(d)?on:off).push(o.v) });
-  const avg=a=>a.reduce((x,y)=>x+y,0)/a.length;
-  const ok=on.length>=3&&off.length>=3;
-  return {n1:on.length,n0:off.length,
-          a1:on.length?avg(on):null, a0:off.length?avg(off):null,
-          diff:ok?avg(on)-avg(off):null};
+  m.forEach((o,d)=>{ if(o.est) return; const n=dryCountOf(d); (n>0?on:off).push({v:o.v,n}) });
+  const avg=a=>a.reduce((x,y)=>x+y.v,0)/a.length;
+  const a0=off.length?avg(off):null;
+  const a1=on.length?avg(on):null;
+  /* 回した日の超過分の合計 ÷ 総回数 ＝ 1回あたり */
+  let per=null, cyc=0;
+  if(on.length>=3&&off.length>=3){
+    const sum=on.reduce((x,y)=>x+(y.v-a0),0);
+    cyc=on.reduce((x,y)=>x+y.n,0);
+    per=cyc?sum/cyc:null;
+  }
+  return {n1:on.length,n0:off.length,cyc,a1,a0,diff:per,
+          perDay:on.length?on.reduce((x,y)=>x+y.n,0)/on.length:0};
 }
 
 function renderBreakdown(){
@@ -1687,23 +1698,24 @@ function dryerBox(){
       <div class="tiny" style="color:var(--tx2);margin-top:5px;line-height:1.6">
         上の 1.77 kWh/日 は請求実績から出した<b>平均</b>です。毎日回すのか隔日かで1回あたりは倍ちがうため、
         記録するとき「🌀 きょう乾燥機を回した」を押しておくと、回した日と回さなかった日の差から実測できます。<br>
-        いま <b>回した日 ${d.n1}日</b>／<b>回さなかった日 ${d.n0}日</b>。
+        いま <b>回した日 ${d.n1}日（計${d.n1?S.events.filter(e=>e.tag==="dry").reduce((a,e)=>a+(e.n||1),0):0}回）</b>／<b>回さなかった日 ${d.n0}日</b>。
         それぞれ3日ぶんたまると結果が出ます（あと ${need(d.n1)}日 と ${need(d.n0)}日）。
       </div>${baseDayBox()}</div>`;
   }
-  const per=d.diff, month=per*30;
+  const per=d.diff, month=per*d.perDay*30;
   const ba=dryerBeforeAfter();
   const spec=+S.settings.dryerSpec||0;
   const over=spec? (per/spec-1)*100 : null;
   return `<div style="margin-top:12px;padding:11px 12px;border-radius:13px;background:rgba(94,234,212,.10);border:1px solid rgba(94,234,212,.34)">
     <div style="font-size:12.5px;font-weight:800;color:#b6f5ea">🌀 乾燥機の実測値</div>
     <div class="grid3" style="gap:8px;margin-top:8px">
-      <div class="stat"><div class="k">回した日</div><div class="v num">${d.a1.toFixed(2)}</div><div class="s">${d.n1}日の平均</div></div>
+      <div class="stat"><div class="k">回した日</div><div class="v num">${d.a1.toFixed(2)}</div><div class="s">${d.n1}日・計${d.cyc}回</div></div>
       <div class="stat"><div class="k">回さない日</div><div class="v num">${d.a0.toFixed(2)}</div><div class="s">${d.n0}日の平均</div></div>
       <div class="stat hl"><div class="k">1回あたり</div><div class="v num">${per.toFixed(2)}</div><div class="s">kWh</div></div>
     </div>
     <div class="tiny" style="color:var(--tx2);margin-top:8px;line-height:1.6">
-      1回 <b>${per.toFixed(2)} kWh（約${Math.round(per*25.59)}円）</b>。毎日回せば月 ${Math.round(month)} kWh・約${Math.round(month*25.59).toLocaleString()}円。
+      1回 <b>${per.toFixed(2)} kWh（約${Math.round(per*25.59)}円）</b>。
+      いまの頻度（1日 ${d.perDay.toFixed(1)}回）だと月 ${Math.round(per*d.perDay*30)} kWh・約${Math.round(per*d.perDay*30*25.59).toLocaleString()}円。
       ${over==null?"":
         over>35?`<b style="color:var(--volt2)">カタログ値 ${spec} kWh を ${over.toFixed(0)}% 上回っています。</b>
            乾燥容量6kgを超える量を一度に乾かしていないか確認してください。ドラムの中で衣類が転がらないと熱風が当たらず、
@@ -2035,7 +2047,7 @@ const nowMs=()=>Date.now();
 function localPayload(){
   const r={},e={},b={};
   S.readings.forEach(x=>{ r[x.date]={meter:+x.meter,time:x.time||"",by:x.by||"",at:x.at||0} });
-  S.events.forEach(x=>{ if(!x.id) x.id=uid(); e[x.id]={date:x.date,tag:x.tag,desc:x.desc||"",by:x.by||"",at:x.at||0} });
+  S.events.forEach(x=>{ if(!x.id) x.id=uid(); e[x.id]={date:x.date,tag:x.tag,desc:x.desc||"",n:x.n||null,by:x.by||"",at:x.at||0} });
   S.bills.forEach(x=>{ b[x.month]={month:x.month,start:x.start,end:x.end,days:x.days,kwh:x.kwh,
     amount:x.amount,fuel:x.fuel,levy:x.levy,at:x.at||0} });
   const st={}; const at=S.setAt||{};
@@ -2057,7 +2069,7 @@ function mergeRemote(d){
   const E={}; S.events.forEach(x=>E[x.id]=x);
   Object.entries(d.events||{}).forEach(([k,v])=>{
     if(!v||!v.date) return;
-    if(!E[k] || (v.at||0)>(E[k].at||0)){ E[k]={id:k,date:v.date,tag:v.tag||"other",desc:v.desc||"",by:v.by||"",at:v.at||0}; ch=true }
+    if(!E[k] || (v.at||0)>(E[k].at||0)){ E[k]={id:k,date:v.date,tag:v.tag||"other",desc:v.desc||"",n:v.n||undefined,by:v.by||"",at:v.at||0}; ch=true }
   });
   const B={}; S.bills.forEach(x=>B[x.month]=x);
   Object.entries(d.bills||{}).forEach(([k,v])=>{
@@ -2232,19 +2244,24 @@ function bind(){
   $("#inDate").value=D.today(); $("#inTime").value=D.now(); $("#bfDate").value=D.today(); $("#evDate").value=D.today();
   $("#inMeter").addEventListener("input",livePredict);
   $("#inDate").addEventListener("change",livePredict);
-  let dryOn=false;
-  const dryPaint=()=>{ $("#dryTgl").classList.toggle("on",dryOn) };
+  let dryN=0;
+  const DRYLBL=["🌀 乾燥機 まわしてない","🌀 乾燥機 1回","🌀 乾燥機 2回","🌀 乾燥機 3回"];
+  const dryPaint=()=>{ $("#dryTgl").classList.toggle("on",dryN>0); $("#dryTgl").textContent=DRYLBL[dryN] };
   const dryLoad=()=>{ const d=$("#inDate").value||D.today();
-    dryOn=S.events.some(e=>e.tag==="dry"&&e.date===d); dryPaint() };
-  $("#dryTgl").onclick=()=>{ dryOn=!dryOn; dryPaint() };
+    const e=S.events.find(x=>x.tag==="dry"&&x.date===d); dryN=e?(e.n||1):0; dryPaint() };
+  $("#dryTgl").onclick=()=>{ dryN=(dryN+1)%4; dryPaint() };
   $("#inDate").addEventListener("change",dryLoad);
   dryLoad();
   /* 記録した日の乾燥機の有無を、イベントとして反映する */
   const dryApply=(date)=>{
-    const has=S.events.some(e=>e.tag==="dry"&&e.date===date);
-    if(dryOn&&!has){ S.events.push({id:uid(),date,tag:"dry",desc:"洗濯乾燥",by:syncCfg().who||"",at:nowMs()}); }
-    else if(!dryOn&&has){ S.events.filter(e=>e.tag==="dry"&&e.date===date).forEach(e=>{ S.tomb["e:"+e.id]=nowMs() });
-      S.events=S.events.filter(e=>!(e.tag==="dry"&&e.date===date)); }
+    const cur=S.events.find(e=>e.tag==="dry"&&e.date===date);
+    if(dryN>0){
+      if(cur){ cur.n=dryN; cur.desc="洗濯乾燥 "+dryN+"回"; cur.at=nowMs(); }
+      else S.events.push({id:uid(),date,tag:"dry",n:dryN,desc:"洗濯乾燥 "+dryN+"回",by:syncCfg().who||"",at:nowMs()});
+    }else if(cur){
+      S.events.filter(e=>e.tag==="dry"&&e.date===date).forEach(e=>{ S.tomb["e:"+e.id]=nowMs() });
+      S.events=S.events.filter(e=>!(e.tag==="dry"&&e.date===date));
+    }
   };
 
   $("#btnSave").onclick=()=>{
