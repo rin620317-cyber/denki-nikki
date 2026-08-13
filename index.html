@@ -572,8 +572,11 @@ details[open] summary:before{content:"▾ "}
       <div><label>警告する7日平均</label><input type="number" step="0.1" id="stAlert"></div>
       <div><label>前年比 警告 %</label><input type="number" step="1" id="stYoy"></div>
     </div>
-    <label>ドラム式洗濯乾燥機の恒常分 kWh/日</label>
-    <input type="number" step="0.01" id="stDryer">
+    <div class="row">
+      <div><label>乾燥機の恒常分 kWh/日</label><input type="number" step="0.01" id="stDryer"></div>
+      <div><label>カタログ値 kWh/回</label><input type="number" step="0.01" id="stDryerSpec"></div>
+    </div>
+    <div class="tiny muted" style="margin-top:7px">AQUA AQW-DX12N（ヒートポンプ式・洗濯12kg／<b style="color:var(--volt)">乾燥6kg</b>・洗濯〜乾燥 約139分）のカタログ値は 1.13 kWh/回。</div>
     <div class="tiny muted" style="margin-top:7px">2025年7月下旬に導入。請求実績から季節を合わせて逆算した値です。
       これを元の水準に足したものが <b id="floorTx" style="color:var(--sky)"></b> ＝ 到達しうる下限で、終奥義の解禁条件にもなっています。</div>
   </div>
@@ -782,7 +785,7 @@ const SEED_BILLS=[
 const DEFAULTS={
   readings:[], events:[], bills:SEED_BILLS, tomb:{}, setAt:{},
   settings:{gap:"prorate",norm:false,base:4.2,target:6.8,alertMa:8.5,alertYoy:30,
-    tier3:28.86,fuel:2.97,levy:4.18,calm:null,mvName:{},dryer:1.77,
+    tier3:28.86,fuel:2.97,levy:4.18,calm:null,mvName:{},dryer:1.77,dryerSpec:1.13,
     sync:{on:false,url:"",room:"",who:""},pStart:"2026-07-22",pEnd:"2026-08-24",name:"ビリすけ",pic:null},
   mascot:{exp:0,lastLog:null,streak:0,best:0,total:0,volt:0,thunders:0}
 };
@@ -1690,6 +1693,8 @@ function dryerBox(){
   }
   const per=d.diff, month=per*30;
   const ba=dryerBeforeAfter();
+  const spec=+S.settings.dryerSpec||0;
+  const over=spec? (per/spec-1)*100 : null;
   return `<div style="margin-top:12px;padding:11px 12px;border-radius:13px;background:rgba(94,234,212,.10);border:1px solid rgba(94,234,212,.34)">
     <div style="font-size:12.5px;font-weight:800;color:#b6f5ea">🌀 乾燥機の実測値</div>
     <div class="grid3" style="gap:8px;margin-top:8px">
@@ -1699,10 +1704,12 @@ function dryerBox(){
     </div>
     <div class="tiny" style="color:var(--tx2);margin-top:8px;line-height:1.6">
       1回 <b>${per.toFixed(2)} kWh（約${Math.round(per*25.59)}円）</b>。毎日回せば月 ${Math.round(month)} kWh・約${Math.round(month*25.59).toLocaleString()}円。
-      ${per>=2.2?"<b style='color:var(--volt2)'>2.2kWhを超えています。ヒーター式か、フィルターと熱交換器の目詰まりが疑われます。</b>"
-       :per<=1.2?"ヒートポンプ式として良好な水準です。これ以上の削減余地は小さいでしょう。"
-       :"標準的な範囲です。"}
-      ${per>1.77?` 請求実績から出した平均 1.77 を <b style="color:var(--volt2)">${(per-1.77).toFixed(2)} 上回っています</b>。乾燥性能が落ちて運転が延びている可能性があります。`:""}
+      ${over==null?"":
+        over>35?`<b style="color:var(--volt2)">カタログ値 ${spec} kWh を ${over.toFixed(0)}% 上回っています。</b>
+           乾燥容量6kgを超える量を一度に乾かしていないか確認してください。ドラムの中で衣類が転がらないと熱風が当たらず、
+           時間だけ延びて生乾きになります。洗濯12kgぶんをそのまま乾燥に回すと、容量の2倍です。`
+        :over>15?`カタログ値 ${spec} kWh を ${over.toFixed(0)}% 上回っています。夏場の高湿度でも1〜2割は増えるため、この範囲なら許容内です。`
+        :`カタログ値 ${spec} kWh とほぼ同等です。適正に運転できています。`}
     </div>${ba}${baseDayBox()}</div>`;
 }
 
@@ -2015,7 +2022,7 @@ const SYNC={es:null,esOk:false,poll:null,busy:false,last:null,err:null,pushT:nul
 function sig(t){ let h=5381; for(let i=0;i<t.length;i++) h=((h*33)^t.charCodeAt(i))>>>0; return t.length+":"+h.toString(36) }
 /* 二人が同じ数字を見るために、計算と判定に関わる設定は共有する。
    マスコットや演出などの見た目の好みは端末ごとに残す */
-const SHARED_SET=["gap","norm","base","target","alertMa","alertYoy","tier3","fuel","levy","pStart","pEnd","dryer"];
+const SHARED_SET=["gap","norm","base","target","alertMa","alertYoy","tier3","fuel","levy","pStart","pEnd","dryer","dryerSpec"];
 function setShared(key,val){
   S.settings[key]=val;
   S.setAt=S.setAt||{}; S.setAt[key]=nowMs();
@@ -2322,6 +2329,8 @@ function bind(){
   bindS("#stBase","base",1); bindS("#stTgt","target",1); bindS("#stAlert","alertMa",1); bindS("#stYoy","alertYoy",1);
   bindS("#stGap","gap"); bindS("#stNorm","norm"); bindS("#stTier3","tier3",1); bindS("#stName","name");
   $("#stDryer").onchange=()=>{ setShared("dryer",+$("#stDryer").value||0); save(); paintFloor(); renderAll() };
+  $("#stDryerSpec").value=S.settings.dryerSpec;
+  $("#stDryerSpec").onchange=()=>{ setShared("dryerSpec",+$("#stDryerSpec").value||0); save(); renderAll() };
   $("#stBase").addEventListener("change",paintFloor);
 
   $("#btnPic").onclick=()=>$("#filePic").click();
@@ -2388,6 +2397,7 @@ function bind(){
     $("#stBase").value=c.base; $("#stTgt").value=c.target; $("#stAlert").value=c.alertMa;
     $("#stYoy").value=c.alertYoy; $("#stGap").value=c.gap; $("#stNorm").checked=!!c.norm;
     $("#stTier3").value=c.tier3; $("#stDryer").value=c.dryer;
+    if($("#stDryerSpec")) $("#stDryerSpec").value=c.dryerSpec;
     if($("#pStart")) $("#pStart").value=c.pStart;
     if($("#pEnd")) $("#pEnd").value=c.pEnd;
     if($("#fuelRate")) $("#fuelRate").value=c.fuel;
