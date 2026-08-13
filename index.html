@@ -1689,6 +1689,38 @@ function baseDayBox(){
     <span style="color:var(--tx3)">この数字が冷凍庫とPCの通信簿です。乾燥機の影響を受けないので、対策の効き目を直接見られます。</span></div>`;
 }
 
+/* 「1回で長く」と「2回に分ける」のどちらが安いかは、1回あたりではなく
+   1日あたりで比べないと答えが出ない。片づける洗濯物の量は同じだから */
+function cycleCompare(){
+  const m=series(), by={};
+  m.forEach((o,d)=>{ if(o.est) return; const n=dryCountOf(d); (by[n]=by[n]||[]).push(o.v) });
+  const avg=a=>a.reduce((x,y)=>x+y,0)/a.length;
+  const base=by[0]&&by[0].length>=2?avg(by[0]):null;
+  const rows=Object.keys(by).map(Number).filter(n=>n>0&&by[n].length>=2).sort();
+  if(rows.length<2) return `<div class="tiny" style="color:var(--tx3);margin-top:8px;line-height:1.6">
+    <b>「1回で長く」と「2回に分ける」の比較</b><br>
+    どちらの日も2日ぶんたまると、1日あたりでどちらが安いかを出します。
+    片づける洗濯物の量が同じなら、比べるべきは1回あたりではなく<b>1日あたり</b>です。
+    いま ${rows.map(n=>n+"回:"+by[n].length+"日").join(" / ")||"データなし"}。</div>`;
+  const cells=rows.map(n=>{
+    const a=avg(by[n]);
+    return {n,days:by[n].length,day:a,dry:base==null?null:a-base};
+  });
+  const best=cells.reduce((x,y)=>y.day<x.day?y:x);
+  return `<div style="margin-top:10px;padding:10px 11px;border-radius:12px;background:rgba(255,225,77,.08);border:1px solid rgba(255,225,77,.3)">
+    <div style="font-size:12.5px;font-weight:800;color:#ffe98a">⚖️ 1回で長く vs 分けて回す</div>
+    <table style="margin-top:7px"><thead><tr><th>回数</th><th>日数</th><th>1日あたり</th><th>うち乾燥分</th></tr></thead><tbody>
+    ${cells.map(c=>`<tr><td>${c.n}回</td><td class="num">${c.days}</td>
+      <td class="num" style="font-weight:900;color:${c===best?"var(--ok)":"var(--tx)"}">${c.day.toFixed(2)}</td>
+      <td class="num">${c.dry==null?"–":c.dry.toFixed(2)}</td></tr>`).join("")}
+    </tbody></table>
+    <div class="tiny" style="color:var(--tx2);margin-top:6px;line-height:1.6">
+      <b style="color:var(--ok)">${best.n===1?"1回で長く回すほうが":best.n+"回に分けるほうが"}1日あたり安い</b>（${cells.filter(c=>c!==best).map(c=>c.n+"回より "+(c.day-best.day).toFixed(2)+" kWh・月"+Math.round((c.day-best.day)*30*25.59)+"円 得").join("、")}）。<br>
+      <span style="color:var(--tx3)">同じ量の洗濯物を片づけるのにかかった1日の電気で比べています。
+      日数が少ないうちは天候や洗濯量のブレが乗るので、それぞれ1週間ぶんは見てください。</span>
+    </div></div>`;
+}
+
 function dryerBox(){
   const d=dryerMeasure();
   const need=(n,k)=>Math.max(0,3-n);
@@ -1700,7 +1732,7 @@ function dryerBox(){
         記録するとき「🌀 きょう乾燥機を回した」を押しておくと、回した日と回さなかった日の差から実測できます。<br>
         いま <b>回した日 ${d.n1}日（計${d.n1?S.events.filter(e=>e.tag==="dry").reduce((a,e)=>a+(e.n||1),0):0}回）</b>／<b>回さなかった日 ${d.n0}日</b>。
         それぞれ3日ぶんたまると結果が出ます（あと ${need(d.n1)}日 と ${need(d.n0)}日）。
-      </div>${baseDayBox()}</div>`;
+      </div>${cycleCompare()}${baseDayBox()}</div>`;
   }
   const per=d.diff, month=per*d.perDay*30;
   const ba=dryerBeforeAfter();
@@ -1722,7 +1754,7 @@ function dryerBox(){
            時間だけ延びて生乾きになります。洗濯12kgぶんをそのまま乾燥に回すと、容量の2倍です。`
         :over>15?`カタログ値 ${spec} kWh を ${over.toFixed(0)}% 上回っています。夏場の高湿度でも1〜2割は増えるため、この範囲なら許容内です。`
         :`カタログ値 ${spec} kWh とほぼ同等です。適正に運転できています。`}
-    </div>${ba}${baseDayBox()}</div>`;
+    </div>${cycleCompare()}${ba}${baseDayBox()}</div>`;
 }
 
 function renderMission(){
