@@ -597,7 +597,10 @@ details[open] summary:before{content:"▾ "}
       <input type="checkbox" id="stNorm" style="width:19px;height:19px;flex:none;padding:0">
       読んだ時刻の差で24時間に正規化する
     </label>
-    <div class="tiny muted" style="margin-top:7px">朝に読んだり夜に読んだりで間隔がぶれるときにON。第3段階の単価は実績がないため推定値です。</div>
+    <div class="tiny muted" style="margin-top:7px">検針時刻がぶれるならONのままで構いません。1日の中で消費が均一だと仮定するため、
+      夜間だけ・日中だけといった<b>18時間未満の短い区間では精度が落ちます</b>（グラフをタップすると警告が出ます）。
+      請求推計には正規化前の実測値を使うので、金額がずれることはありません。<br>
+      第3段階の単価は実績がないため推定値です。</div>
     <div class="row" style="margin-top:11px"><div><label>第3段階 円/kWh（推定）</label><input type="number" step="0.01" id="stTier3"></div></div>
   </div>
 
@@ -846,14 +849,18 @@ function series(){
     const days=D.diff(a.date,b.date);
     if(days<=0) continue;
     const delta=+(b.meter-a.meter).toFixed(3);
-    let per=delta/days;
-    if(S.settings.norm){ const h=hoursBetween(a,b); if(h>1) per=delta/(h/24); }
+    const hrs=hoursBetween(a,b);
+    /* raw は「その日付に割り当てる実測ぶん」。合計すると必ずメーターの差に一致する。
+       v は日どうしを比べるための値で、設定に応じて24時間に正規化する */
+    const rawPer=delta/days;
+    let per=rawPer;
+    if(S.settings.norm && hrs>1) per=delta/(hrs/24);
     if(days===1){
-      m.set(b.date,{v:per,raw:delta,est:false,span:1});
+      m.set(b.date,{v:per,raw:delta,est:false,span:1,hrs});
     }else if(S.settings.gap==="prorate"){
-      for(let k=1;k<=days;k++) m.set(D.add(a.date,k),{v:per,raw:per,est:true,span:days});
+      for(let k=1;k<=days;k++) m.set(D.add(a.date,k),{v:per,raw:rawPer,est:true,span:days,hrs:hrs/days});
     }else{
-      m.set(b.date,{v:per,raw:delta,est:false,span:days,lump:true});
+      m.set(b.date,{v:per,raw:delta,est:false,span:days,lump:true,hrs});
     }
   }
   return m;
@@ -1801,11 +1808,11 @@ function estimatePeriod(){
   const st=S.settings.pStart, en=S.settings.pEnd;
   const days=D.diff(st,en)+1;
   const m=series();
-  let sum=0,n=0;
-  for(let d=st; d<=en; d=D.add(d,1)){ const x=m.get(d); if(x){sum+=x.v;n++} }
+  let sum=0,rate=0,n=0;
+  for(let d=st; d<=en; d=D.add(d,1)){ const x=m.get(d); if(x){ sum+=x.raw; rate+=x.v; n++ } }
   if(!n) return {days,measured:0,kwh:null,amount:null,avg:null};
-  const avg=sum/n;
-  const kwh=sum+avg*(days-n);
+  const avg=rate/n;                 /* 残り日数の外挿には正規化した1日あたりを使う */
+  const kwh=sum+avg*(days-n);       /* 実測ぶんはメーターの実数をそのまま足す */
   const amount=billTotal(kwh,+S.settings.fuel,+S.settings.levy,+S.settings.tier3);
   return {days,measured:n,kwh,amount,avg,sum};
 }
@@ -1931,6 +1938,9 @@ function showDaily(d,m){
   const o=m.get(d); if(!o) return;
   const a=ma7(m,d), ly=lastYearPerDay(d);
   const evs=S.events.filter(e=>e.date===d);
+  const hw = o.hrs && (o.hrs<18||o.hrs>30)
+    ? `<div class="tiny" style="color:var(--volt2);margin-top:4px">⚠ 前回の検針から ${o.hrs.toFixed(1)}時間。24時間換算で ${(24/o.hrs).toFixed(2)}倍しています。
+        夜間だけ・日中だけといった偏った区間だと実態からずれるので、参考値として見てください。</div>` : "";
   $("#tipDaily").innerHTML=`<b>${d}（${D.wd(d)}）</b>
     <span style="font-size:17px;font-weight:900" class="num">${o.v.toFixed(2)}</span> kWh/日
     ${o.est?'<span class="est">按分'+o.span+'日</span>':""}
@@ -1938,7 +1948,7 @@ function showDaily(d,m){
       7日平均 ${a?a.toFixed(2):"–"} ／ 前年同期 ${ly?ly.toFixed(2):"–"}
       ${a?`／ 平均比 <b class="${o.v>a?"up":"down"}">${o.v>a?"+":""}${((o.v/a-1)*100).toFixed(0)}%</b>`:""}
     </div>
-    ${evs.length?`<div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:5px">${evs.map(e=>`<span class="tag t-${e.tag}">${tagLabel(e.tag)}${e.desc?" "+esc(e.desc):""}</span>`).join("")}</div>`:""}`;
+    ${evs.length?`<div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:5px">${evs.map(e=>`<span class="tag t-${e.tag}">${tagLabel(e.tag)}${e.desc?" "+esc(e.desc):""}</span>`).join("")}</div>`:""}${hw}`;
 }
 
 function renderChartMonthly(){
