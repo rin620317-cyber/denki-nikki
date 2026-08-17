@@ -226,6 +226,7 @@ section.view.on{display:block}
 .t-appliance{background:rgba(255,176,32,.2);color:#ffdb9b}
 .t-dry{background:rgba(94,234,212,.22);color:#b6f5ea}
 .t-clean{background:rgba(190,242,100,.22);color:#e3f7b0}
+.t-wash{background:rgba(125,211,252,.16);color:#c3e9ff}
 .t-away{background:rgba(148,163,184,.22);color:#dbe3ef}
 .t-other{background:rgba(255,255,255,.13);color:#d7dcea}
 .chips{display:flex;flex-wrap:wrap;gap:7px}
@@ -400,7 +401,11 @@ details[open] summary:before{content:"▾ "}
       <span class="unit">kWh</span>
     </div>
     <div class="pred" id="predLine"><span class="muted tiny">前回の値との差から自動計算します</span></div>
-    <div class="chips" style="margin-top:11px"><button id="dryTgl" type="button">🌀 乾燥機 まわしてない</button></div>
+    <div class="chips" style="margin-top:11px">
+      <button id="dryTgl" type="button">🌀 洗濯乾燥 1回</button>
+      <button id="washTgl" type="button">💧 洗濯のみ なし</button>
+    </div>
+    <div class="tiny muted" style="margin-top:6px">乾燥ありは既定で1回。回さなかった日はタップして「なし」に。洗濯のみ（寝具など）は約0.06kWhで、電気にはほぼ影響しません。</div>
     <div style="margin-top:11px"><button class="btn" id="btnSave">⚡ 記録する</button></div>
     <div class="tiny muted" id="lastRead" style="margin-top:9px;text-align:center"></div>
   </div>
@@ -494,7 +499,7 @@ details[open] summary:before{content:"▾ "}
       <div class="row" style="margin-bottom:10px"><div><label>日付</label><input type="date" id="evDate"></div></div>
       <label>タグ</label>
       <div class="chips" id="evTags" style="margin-bottom:11px">
-        <button data-t="dry" class="on">🌀 乾燥機</button><button data-t="clean">🧽 清掃・メンテ</button><button data-t="aircon">❄️ エアコン</button><button data-t="guest">👥 来客</button>
+        <button data-t="dry" class="on">🌀 洗濯乾燥</button><button data-t="wash">💧 洗濯のみ</button><button data-t="clean">🧽 清掃・メンテ</button><button data-t="aircon">❄️ エアコン</button><button data-t="guest">👥 来客</button>
         <button data-t="away">✈️ 外泊/不在</button><button data-t="defrost">🧊 霜取り</button>
         <button data-t="pc">💻 PC</button><button data-t="appliance">🔌 家電</button><button data-t="other">📝 その他</button>
       </div>
@@ -694,6 +699,8 @@ details[open] summary:before{content:"▾ "}
       <button class="btn sub" id="exJ">全部バックアップ</button>
     </div>
     <div style="margin-top:9px"><button class="btn sub" id="imJ">バックアップから復元</button></div>
+    <div style="margin-top:9px"><button class="btn sub" id="exClip">記録をコピー（相談用）</button></div>
+    <div class="tiny muted" style="margin-top:7px">日付・時刻・積算値・日次kWh・その日のイベントを、そのまま貼り付けられる形でコピーします。</div>
     <input type="file" id="fileJ" accept="application/json,.json" style="display:none">
     <div class="hr"></div>
     <button class="btn dgr" id="btnReset">すべて消去して初期化</button>
@@ -784,7 +791,7 @@ const SEED_BILLS=[
 
 const DEFAULTS={
   readings:[], events:[], bills:SEED_BILLS, tomb:{}, setAt:{},
-  settings:{gap:"prorate",norm:false,base:4.2,target:6.8,alertMa:8.5,alertYoy:30,
+  settings:{gap:"prorate",norm:true,base:4.2,target:6.8,alertMa:8.5,alertYoy:30,
     tier3:28.86,fuel:2.97,levy:4.18,calm:null,mvName:{},dryer:1.77,dryerSpec:1.13,
     sync:{on:false,url:"",room:"",who:""},pStart:"2026-07-22",pEnd:"2026-08-24",name:"ビリすけ",pic:null},
   mascot:{exp:0,lastLog:null,streak:0,best:0,total:0,volt:0,thunders:0}
@@ -1691,6 +1698,12 @@ function baseDayBox(){
 
 /* 「1回で長く」と「2回に分ける」のどちらが安いかは、1回あたりではなく
    1日あたりで比べないと答えが出ない。片づける洗濯物の量は同じだから */
+function washOnlyNote(){
+  const tot=S.events.filter(e=>e.tag==="wash").reduce((a,e)=>a+(e.n||1),0);
+  if(!tot) return "";
+  return `<div class="tiny" style="color:var(--tx3);margin-top:8px">💧 洗濯のみ 通算${tot}回。1回あたり約0.06kWh（1.5円）なので、合計でも約${(tot*0.055).toFixed(1)}kWh・${Math.round(tot*0.055*25.59)}円です。</div>`;
+}
+
 function cycleCompare(){
   const m=series(), by={};
   m.forEach((o,d)=>{ if(o.est) return; const n=dryCountOf(d); (by[n]=by[n]||[]).push(o.v) });
@@ -1732,7 +1745,7 @@ function dryerBox(){
         記録するとき「🌀 きょう乾燥機を回した」を押しておくと、回した日と回さなかった日の差から実測できます。<br>
         いま <b>回した日 ${d.n1}日（計${d.n1?S.events.filter(e=>e.tag==="dry").reduce((a,e)=>a+(e.n||1),0):0}回）</b>／<b>回さなかった日 ${d.n0}日</b>。
         それぞれ3日ぶんたまると結果が出ます（あと ${need(d.n1)}日 と ${need(d.n0)}日）。
-      </div>${cycleCompare()}${baseDayBox()}</div>`;
+      </div>${cycleCompare()}${baseDayBox()}${washOnlyNote()}</div>`;
   }
   const per=d.diff, month=per*d.perDay*30;
   const ba=dryerBeforeAfter();
@@ -1754,7 +1767,7 @@ function dryerBox(){
            時間だけ延びて生乾きになります。洗濯12kgぶんをそのまま乾燥に回すと、容量の2倍です。`
         :over>15?`カタログ値 ${spec} kWh を ${over.toFixed(0)}% 上回っています。夏場の高湿度でも1〜2割は増えるため、この範囲なら許容内です。`
         :`カタログ値 ${spec} kWh とほぼ同等です。適正に運転できています。`}
-    </div>${cycleCompare()}${ba}${baseDayBox()}</div>`;
+    </div>${cycleCompare()}${ba}${baseDayBox()}${washOnlyNote()}</div>`;
 }
 
 function renderMission(){
@@ -1988,7 +2001,7 @@ function renderChartYoy(){
 /* ==================================================================
    LISTS
 ================================================================== */
-const TAGS={dry:"🌀 乾燥機",clean:"🧽 清掃・メンテ",aircon:"❄️ エアコン",guest:"👥 来客",away:"✈️ 不在",defrost:"🧊 霜取り",pc:"💻 PC",appliance:"🔌 家電",other:"📝 その他"};
+const TAGS={dry:"🌀 洗濯乾燥",wash:"💧 洗濯のみ",clean:"🧽 清掃・メンテ",aircon:"❄️ エアコン",guest:"👥 来客",away:"✈️ 不在",defrost:"🧊 霜取り",pc:"💻 PC",appliance:"🔌 家電",other:"📝 その他"};
 const tagLabel=t=>TAGS[t]||t;
 
 function renderLists(){
@@ -2276,25 +2289,38 @@ function bind(){
   $("#inDate").value=D.today(); $("#inTime").value=D.now(); $("#bfDate").value=D.today(); $("#evDate").value=D.today();
   $("#inMeter").addEventListener("input",livePredict);
   $("#inDate").addEventListener("change",livePredict);
-  let dryN=0;
-  const DRYLBL=["🌀 乾燥機 まわしてない","🌀 乾燥機 1回","🌀 乾燥機 2回","🌀 乾燥機 3回"];
-  const dryPaint=()=>{ $("#dryTgl").classList.toggle("on",dryN>0); $("#dryTgl").textContent=DRYLBL[dryN] };
-  const dryLoad=()=>{ const d=$("#inDate").value||D.today();
-    const e=S.events.find(x=>x.tag==="dry"&&x.date===d); dryN=e?(e.n||1):0; dryPaint() };
+  let dryN=1, washN=0;
+  const DRYLBL=["🌀 洗濯乾燥 なし","🌀 洗濯乾燥 1回","🌀 洗濯乾燥 2回","🌀 洗濯乾燥 3回"];
+  const WSHLBL=["💧 洗濯のみ なし","💧 洗濯のみ 1回","💧 洗濯のみ 2回"];
+  const dryPaint=()=>{
+    $("#dryTgl").classList.toggle("on",dryN>0); $("#dryTgl").textContent=DRYLBL[dryN];
+    $("#washTgl").classList.toggle("on",washN>0); $("#washTgl").textContent=WSHLBL[washN];
+  };
+  /* 既定は1回。ただし「記録済みなのに乾燥イベントがない日」は本人が0にした日なので0を保つ */
+  const dryLoad=()=>{
+    const d=$("#inDate").value||D.today();
+    const e=S.events.find(x=>x.tag==="dry"&&x.date===d);
+    const w=S.events.find(x=>x.tag==="wash"&&x.date===d);
+    dryN = e ? (e.n||1) : (S.readings.some(r=>r.date===d) ? 0 : 1);
+    washN = w ? Math.min(2,w.n||1) : 0;
+    dryPaint();
+  };
   $("#dryTgl").onclick=()=>{ dryN=(dryN+1)%4; dryPaint() };
+  $("#washTgl").onclick=()=>{ washN=(washN+1)%3; dryPaint() };
   $("#inDate").addEventListener("change",dryLoad);
   dryLoad();
   /* 記録した日の乾燥機の有無を、イベントとして反映する */
-  const dryApply=(date)=>{
-    const cur=S.events.find(e=>e.tag==="dry"&&e.date===date);
-    if(dryN>0){
-      if(cur){ cur.n=dryN; cur.desc="洗濯乾燥 "+dryN+"回"; cur.at=nowMs(); }
-      else S.events.push({id:uid(),date,tag:"dry",n:dryN,desc:"洗濯乾燥 "+dryN+"回",by:syncCfg().who||"",at:nowMs()});
+  const applyTag=(date,tag,n,label)=>{
+    const cur=S.events.find(e=>e.tag===tag&&e.date===date);
+    if(n>0){
+      if(cur){ cur.n=n; cur.desc=label+" "+n+"回"; cur.at=nowMs(); }
+      else S.events.push({id:uid(),date,tag,n,desc:label+" "+n+"回",by:syncCfg().who||"",at:nowMs()});
     }else if(cur){
-      S.events.filter(e=>e.tag==="dry"&&e.date===date).forEach(e=>{ S.tomb["e:"+e.id]=nowMs() });
-      S.events=S.events.filter(e=>!(e.tag==="dry"&&e.date===date));
+      S.events.filter(e=>e.tag===tag&&e.date===date).forEach(e=>{ S.tomb["e:"+e.id]=nowMs() });
+      S.events=S.events.filter(e=>!(e.tag===tag&&e.date===date));
     }
   };
+  const dryApply=(date)=>{ applyTag(date,"dry",dryN,"洗濯乾燥"); applyTag(date,"wash",washN,"洗濯のみ") };
 
   $("#btnSave").onclick=()=>{
     const v=parseFloat($("#inMeter").value);
@@ -2465,6 +2491,24 @@ function bind(){
 
   $("#btnPicClear").onclick=()=>{ S.settings.pic=null; save(); renderMascot(); paintMascot(); toast("ビリすけに戻しました") };
 
+  $("#exClip").onclick=()=>{
+    const m=series();
+    const rs=[...S.readings].sort((a,b)=>a.date<b.date?-1:1);
+    if(!rs.length) return toast("記録がありません");
+    const lines=rs.map(r=>{
+      const o=m.get(r.date);
+      const ev=S.events.filter(e=>e.date===r.date)
+        .map(e=>tagLabel(e.tag).replace(/^\S+\s/,"")+(e.n?e.n+"回":"")+(e.desc&&!e.n?"("+e.desc+")":""))
+        .join(",");
+      return [r.date,D.wd(r.date),r.time||"",r.meter,
+              o?o.v.toFixed(2):"-",o&&o.est?"※按分":"",ev].filter(x=>x!=="").join(" ");
+    });
+    const head="日付 曜 時刻 積算kWh 日次kWh イベント";
+    const txt=[head].concat(lines).join(String.fromCharCode(10));
+    navigator.clipboard.writeText(txt).then(
+      ()=>toast(rs.length+"件をコピーしました"),
+      ()=>prompt("これをコピーしてください",txt));
+  };
   $("#exR").onclick=exportReadings; $("#exE").onclick=exportEvents; $("#exB").onclick=exportBills;
   $("#exJ").onclick=()=>dl("denki_backup_"+D.today()+".json",JSON.stringify(S,null,1),"application/json");
   $("#imJ").onclick=()=>$("#fileJ").click();
