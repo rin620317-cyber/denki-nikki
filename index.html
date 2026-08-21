@@ -795,7 +795,7 @@ const SEED_BILLS=[
 const DEFAULTS={
   readings:[], events:[], bills:SEED_BILLS, tomb:{}, setAt:{},
   settings:{gap:"prorate",norm:true,base:4.2,target:6.8,alertMa:8.5,alertYoy:30,
-    tier3:28.86,fuel:2.97,levy:4.18,calm:null,mvName:{},dryer:1.77,dryerSpec:1.13,
+    tier3:28.86,fuel:2.97,levy:4.18,calm:null,mvName:{},dryer:1.63,dryerSpec:1.13,
     sync:{on:false,url:"",room:"",who:""},pStart:"2026-07-22",pEnd:"2026-08-24",name:"ビリすけ",pic:null},
   mascot:{exp:0,lastLog:null,streak:0,best:0,total:0,volt:0,thunders:0}
 };
@@ -889,11 +889,12 @@ const floorKwh=()=>+( (+S.settings.base) + (+S.settings.dryer||0) ).toFixed(2);
    → C 2026/2-4月 6.75（＋霜）      → D 2026/5-6月 7.82（＋PC2台） */
 const BREAKDOWN=()=>{
   const base=+S.settings.base, dry=+S.settings.dryer||0, peak=8.11;
-  const frost=0.69, pc=1.07;
+  /* 30分値の前年同月比から実測: 常時負荷 +0.56、活動分（ほぼ乾燥機）+2.12 */
+  const frost=0.56, pc=1.07;
   return {peak, parts:[
     {k:"base",  v:base, c:"#5eead4", nm:"元の水準",       sub:"2025年前半の定常値",         fix:true},
     {k:"dryer", v:dry,  c:"#7dd3fc", nm:"洗濯乾燥機",     sub:"2025年7月下旬 導入・恒常",   fix:true},
-    {k:"frost", v:frost,c:"#ffe14d", nm:"冷凍庫の霜",     sub:"2025年12月〜・対策済/判定待ち"},
+    {k:"frost", v:frost,c:"#ffe14d", nm:"常時負荷の増加",   sub:"前年比+23W・冷凍庫の霜など・対策済/判定待ち"},
     {k:"pc",    v:pc,   c:"#c4b5fd", nm:"常時PC 2台目",   sub:"2026年3月〜・夜間スリープで削減可"},
     {k:"etc",   v:+(peak-base-dry-frost-pc).toFixed(2), c:"#fb7185", nm:"季節・その他", sub:"初夏の上振れなど"},
   ]};
@@ -1634,6 +1635,20 @@ function dryerBeforeAfter(){
       :dd<-0.15?"むしろ増えています。清掃以外の要因（気温・洗濯量）を疑ってください。":"有意な差は出ていません。"}</div>`;
 }
 
+/* 30分値18か月（2025/1/12〜2026/6/21）から検出した203回の運転の実測。
+   同じ機械・同じ家の値なので、カタログより比較の基準として正しい */
+const DRY_REF={
+  7:1.28, 8:1.28, 9:1.28, 10:1.28,          // 夏  実測中央値 1.21〜1.34
+  11:2.66, 12:2.66, 1:2.66, 2:2.66, 3:2.66, // 冬  実測中央値 2.30〜3.02
+  4:1.53, 5:1.53, 6:1.53                    // 春〜初夏 実測中央値 1.45〜1.62
+};
+const DRY_REF_NOTE={7:"夏",8:"夏",9:"夏",10:"夏",11:"冬",12:"冬",1:"冬",2:"冬",3:"冬",4:"春〜初夏",5:"春〜初夏",6:"春〜初夏"};
+function dryRef(){
+  const m=series(), ds=sortedDates(m);
+  const mo=(ds.length?D.parse(ds[ds.length-1]):new Date()).getMonth()+1;
+  return {v:DRY_REF[mo], season:DRY_REF_NOTE[mo], mo};
+}
+
 /* 乾燥機を回した日と回さなかった日の平均差 ＝ 1回あたりの実測値。
    按分で埋めた推定日は、その日に回したか分からないので除く */
 function dryCountOf(date){
@@ -1756,8 +1771,9 @@ function dryerBox(){
   }
   const per=d.diff, month=per*d.perDay*30;
   const ba=dryerBeforeAfter();
-  const spec=+S.settings.dryerSpec||0;
-  const over=spec? (per/spec-1)*100 : null;
+  const R=dryRef();
+  const spec=R.v;                       /* 昨年同時期の実測を基準にする */
+  const over=(per/spec-1)*100;
   return `<div style="margin-top:12px;padding:11px 12px;border-radius:13px;background:rgba(94,234,212,.10);border:1px solid rgba(94,234,212,.34)">
     <div style="font-size:12.5px;font-weight:800;color:#b6f5ea">🌀 乾燥機の実測値</div>
     <div class="grid3" style="gap:8px;margin-top:8px">
@@ -1768,12 +1784,13 @@ function dryerBox(){
     <div class="tiny" style="color:var(--tx2);margin-top:8px;line-height:1.6">
       1回 <b>${per.toFixed(2)} kWh（約${Math.round(per*25.59)}円）</b>。
       いまの頻度（1日 ${d.perDay.toFixed(1)}回）だと月 ${Math.round(per*d.perDay*30)} kWh・約${Math.round(per*d.perDay*30*25.59).toLocaleString()}円。
-      ${over==null?"":
-        over>35?`<b style="color:var(--volt2)">カタログ値 ${spec} kWh を ${over.toFixed(0)}% 上回っています。</b>
-           乾燥容量6kgを超える量を一度に乾かしていないか確認してください。ドラムの中で衣類が転がらないと熱風が当たらず、
-           時間だけ延びて生乾きになります。洗濯12kgぶんをそのまま乾燥に回すと、容量の2倍です。`
-        :over>15?`カタログ値 ${spec} kWh を ${over.toFixed(0)}% 上回っています。夏場の高湿度でも1〜2割は増えるため、この範囲なら許容内です。`
-        :`カタログ値 ${spec} kWh とほぼ同等です。適正に運転できています。`}
+      基準は<b>この機械の昨年同時期の実測 ${spec} kWh</b>（${R.season}・30分値から検出した203回の中央値）。カタログ値は1.13kWhですが、
+      同じ家・同じ使い方で比べるほうが正確です。
+      ${over>60?`<b style="color:var(--rose)">基準を ${over.toFixed(0)}% 上回っています。昨年の同じ季節と比べて明らかに多い。</b>
+           量が増えたのでなければ、機械側の性能低下を疑う段階です。`
+        :over>25?`<b style="color:var(--volt2)">基準を ${over.toFixed(0)}% 上回っています。</b>洗濯物の量が増えていないか確認してください。`
+        :over<-15?`基準を ${Math.abs(over).toFixed(0)}% 下回っています。良好です。`
+        :`昨年同時期とほぼ同じ水準です。正常に動いています。`}
     </div>${cycleCompare()}${ba}${baseDayBox()}${washOnlyNote()}</div>`;
 }
 
