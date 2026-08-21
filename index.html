@@ -406,6 +406,7 @@ details[open] summary:before{content:"▾ "}
       <button id="washTgl" type="button">💧 洗濯のみ なし</button>
     </div>
     <div class="tiny muted" style="margin-top:6px">乾燥ありは既定で1回。回さなかった日はタップして「なし」に。洗濯のみ（寝具など）は約0.06kWhで、電気にはほぼ影響しません。</div>
+    <div id="gapBox"></div>
     <div style="margin-top:11px"><button class="btn" id="btnSave">⚡ 記録する</button></div>
     <div class="tiny muted" id="lastRead" style="margin-top:9px;text-align:center"></div>
   </div>
@@ -858,7 +859,8 @@ function series(){
     if(days===1){
       m.set(b.date,{v:per,raw:delta,est:false,span:1,hrs});
     }else if(S.settings.gap==="prorate"){
-      for(let k=1;k<=days;k++) m.set(D.add(a.date,k),{v:per,raw:rawPer,est:true,span:days,hrs:hrs/days});
+      const memb=[]; for(let k=1;k<=days;k++) memb.push(D.add(a.date,k));
+      for(let k=1;k<=days;k++) m.set(D.add(a.date,k),{v:per,raw:rawPer,est:true,span:days,hrs:hrs/days,memb});
     }else{
       m.set(b.date,{v:per,raw:delta,est:false,span:days,lump:true,hrs});
     }
@@ -1655,19 +1657,26 @@ function dryCountOf(date){
   const e=S.events.find(x=>x.tag==="dry"&&x.date===date);
   return e ? (e.n||1) : 0;
 }
+/* 按分した日は、区間内のどの日も乾燥回数が同じなら平均値が代表値として使える。
+   回数がバラバラな区間だけ除外する */
+function usableSpan(o,d){
+  if(!o.est) return true;
+  if(!o.memb || o.memb.length<2) return false;
+  const ns=o.memb.map(dryCountOf);
+  return ns.every(n=>n===ns[0]);
+}
 function dryerMeasure(){
   const m=series();
   const on=[],off=[];
-  m.forEach((o,d)=>{ if(o.est) return; const n=dryCountOf(d); (n>0?on:off).push({v:o.v,n}) });
+  m.forEach((o,d)=>{ if(!usableSpan(o,d)) return; const n=dryCountOf(d); (n>0?on:off).push({v:o.v,n}) });
   const avg=a=>a.reduce((x,y)=>x+y.v,0)/a.length;
   const a0=off.length?avg(off):null;
   const a1=on.length?avg(on):null;
   /* 回した日の超過分の合計 ÷ 総回数 ＝ 1回あたり */
-  let per=null, cyc=0;
-  if(on.length>=3&&off.length>=3){
-    const sum=on.reduce((x,y)=>x+(y.v-a0),0);
-    cyc=on.reduce((x,y)=>x+y.n,0);
-    per=cyc?sum/cyc:null;
+  const cyc=on.reduce((x,y)=>x+y.n,0);      /* 総回数は常に数える（表示に使う） */
+  let per=null;
+  if(on.length>=3&&off.length>=3&&cyc){
+    per=on.reduce((x,y)=>x+(y.v-a0),0)/cyc;
   }
   return {n1:on.length,n0:off.length,cyc,a1,a0,diff:per,
           perDay:on.length?on.reduce((x,y)=>x+y.n,0)/on.length:0};
@@ -1728,7 +1737,7 @@ function washOnlyNote(){
 
 function cycleCompare(){
   const m=series(), by={};
-  m.forEach((o,d)=>{ if(o.est) return; const n=dryCountOf(d); (by[n]=by[n]||[]).push(o.v) });
+  m.forEach((o,d)=>{ if(!usableSpan(o,d)) return; const n=dryCountOf(d); (by[n]=by[n]||[]).push(o.v) });
   const avg=a=>a.reduce((x,y)=>x+y,0)/a.length;
   const base=by[0]&&by[0].length>=2?avg(by[0]):null;
   const rows=Object.keys(by).map(Number).filter(n=>n>0&&by[n].length>=2).sort();
@@ -2314,8 +2323,39 @@ function bind(){
 
   /* home input */
   $("#inDate").value=D.today(); $("#inTime").value=D.now(); $("#bfDate").value=D.today(); $("#evDate").value=D.today();
+  /* 前回から日が空いているとき、飛ばした日の乾燥回数もここで入れられるようにする */
+  window.paintGap=()=>{
+    const box=$("#gapBox"); if(!box) return;
+    const date=$("#inDate").value||D.today();
+    const prev=[...S.readings].filter(r=>r.date<date).sort((a,b)=>a.date<b.date?-1:1).pop();
+    const gap=prev?D.diff(prev.date,date):0;
+    if(gap<2){ box.innerHTML=""; return }
+    const miss=[]; for(let k=1;k<gap;k++) miss.push(D.add(prev.date,k));
+    box.innerHTML=`<div style="margin-top:10px;padding:10px 11px;border-radius:12px;background:rgba(167,139,250,.10);border:1px solid rgba(167,139,250,.3)">
+      <div style="font-size:12.5px;font-weight:800;color:#d6c7ff">${miss.length}日ぶん記録が飛んでいます</div>
+      <div class="tiny" style="color:var(--tx2);margin-top:4px;line-height:1.55">
+        使用量は日数で按分されます。<b>飛んだ日の乾燥回数もここで入れておけば、測定に使えます</b>（回数が揃っていれば平均値が代表値になります）。</div>
+      <div class="chips" style="margin-top:8px">${miss.map(d=>
+        `<button type="button" class="gapD" data-d="${d}">${D.md(d)}(${D.wd(d)}) 🌀${dryCountOf(d)}回</button>`).join("")}</div>
+    </div>`;
+    $$("#gapBox .gapD").forEach(b=>b.onclick=()=>{
+      const d=b.dataset.d, cur=dryCountOf(d), nx=(cur+1)%4;
+      applyTag(d,"dry",nx,"洗濯乾燥"); save(); paintGap(); renderAll();
+    });
+  };
+  $("#inDate").addEventListener("change",()=>paintGap());
   $("#inMeter").addEventListener("input",livePredict);
   $("#inDate").addEventListener("change",livePredict);
+  const applyTag=(date,tag,n,label)=>{
+    const cur=S.events.find(e=>e.tag===tag&&e.date===date);
+    if(n>0){
+      if(cur){ cur.n=n; cur.desc=label+" "+n+"回"; cur.at=nowMs(); }
+      else S.events.push({id:uid(),date,tag,n,desc:label+" "+n+"回",by:syncCfg().who||"",at:nowMs()});
+    }else if(cur){
+      S.events.filter(e=>e.tag===tag&&e.date===date).forEach(e=>{ S.tomb["e:"+e.id]=nowMs() });
+      S.events=S.events.filter(e=>!(e.tag===tag&&e.date===date));
+    }
+  };
   let dryN=1, washN=0;
   const DRYLBL=["🌀 洗濯乾燥 なし","🌀 洗濯乾燥 1回","🌀 洗濯乾燥 2回","🌀 洗濯乾燥 3回"];
   const WSHLBL=["💧 洗濯のみ なし","💧 洗濯のみ 1回","💧 洗濯のみ 2回"];
@@ -2335,18 +2375,8 @@ function bind(){
   $("#dryTgl").onclick=()=>{ dryN=(dryN+1)%4; dryPaint() };
   $("#washTgl").onclick=()=>{ washN=(washN+1)%3; dryPaint() };
   $("#inDate").addEventListener("change",dryLoad);
-  dryLoad();
+  dryLoad(); paintGap();
   /* 記録した日の乾燥機の有無を、イベントとして反映する */
-  const applyTag=(date,tag,n,label)=>{
-    const cur=S.events.find(e=>e.tag===tag&&e.date===date);
-    if(n>0){
-      if(cur){ cur.n=n; cur.desc=label+" "+n+"回"; cur.at=nowMs(); }
-      else S.events.push({id:uid(),date,tag,n,desc:label+" "+n+"回",by:syncCfg().who||"",at:nowMs()});
-    }else if(cur){
-      S.events.filter(e=>e.tag===tag&&e.date===date).forEach(e=>{ S.tomb["e:"+e.id]=nowMs() });
-      S.events=S.events.filter(e=>!(e.tag===tag&&e.date===date));
-    }
-  };
   const dryApply=(date)=>{ applyTag(date,"dry",dryN,"洗濯乾燥"); applyTag(date,"wash",washN,"洗濯のみ") };
 
   $("#btnSave").onclick=()=>{
@@ -2361,7 +2391,7 @@ function bind(){
     }
     dryApply(date);
     upsertReading(date,time,v);
-    $("#inMeter").value=""; livePredict();
+    $("#inMeter").value=""; livePredict(); paintGap();
     $("#inMeter").blur();
   };
   $("#mascotBtn").onclick=()=>{
