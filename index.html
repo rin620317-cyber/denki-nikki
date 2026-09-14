@@ -537,6 +537,11 @@ details[open] summary:before{content:"▾ "}
 
   <div class="card">
     <h3><span class="dot"></span>請求実績を追加</h3>
+    <details style="margin-bottom:12px"><summary>カブアンドの画面から取り込む（おすすめ）</summary>
+      <div class="tiny muted" style="margin:8px 0 7px">カブアンドのマイページ →「利用料金」の画面を<b>まるごとコピー</b>して貼り付けてください。使用期間・使用量・請求額・燃調・賦課金を読み取ります。</div>
+      <textarea id="kabuTxt" rows="4" placeholder="ここに貼り付け" style="font-size:12.5px"></textarea>
+      <button class="btn sub" id="kabuImp" style="margin-top:8px">読み取って追加</button>
+    </details>
     <div class="row" style="margin-bottom:9px">
       <div><label>請求月</label><input type="month" id="bMonth"></div>
       <div><label>kWh</label><input type="number" id="bKwh"></div>
@@ -1830,6 +1835,25 @@ function renderMission(){
 /* ==================================================================
    PERIOD ESTIMATE
 ================================================================== */
+/* カブアンドの「利用料金」画面をコピーして貼ったテキストから、請求実績を読み取る */
+function parseKabuBill(txt){
+  const t=String(txt||"").replace(/[，]/g,",").replace(/\s+/g," ");
+  const num=s=>+String(s).replace(/,/g,"");
+  const per=t.match(/使用期間\s*[：:]\s*(\d{4})\/(\d{1,2})\/(\d{1,2})\s*[~〜～-]\s*(\d{4})\/(\d{1,2})\/(\d{1,2})/);
+  const mo=t.match(/(\d{1,2})\s*月分の請求額/);
+  const kwh=t.match(/使用量\s*([\d,.]+)\s*kWh/);
+  const amt=t.match(/請求額\s*([\d,]+)\s*円/);
+  const fuel=t.match(/燃料費調整額\s*(-?[\d,.]+)\s*円/);
+  const levy=t.match(/再エネ発電促進賦課金\s*([\d,]+)\s*円/);
+  if(!per||!kwh) throw new Error("使用期間と使用量が見つかりません。利用料金の画面をまるごとコピーしてください");
+  const start=per[1]+"-"+p2(per[2])+"-"+p2(per[3]);
+  const end=per[4]+"-"+p2(per[5])+"-"+p2(per[6]);
+  /* 請求月の年は期間の終わりに合わせる（1月分は前年12月から始まるため） */
+  const month = mo ? per[4]+"-"+p2(mo[1]) : end.slice(0,7);
+  return {month,start,end,days:D.diff(start,end)+1,kwh:num(kwh[1]),
+    amount:amt?num(amt[1]):0, fuel:fuel?num(fuel[1]):0, levy:levy?num(levy[1]):0};
+}
+
 function estimatePeriod(){
   const st=S.settings.pStart, en=S.settings.pEnd;
   const days=D.diff(st,en)+1;
@@ -2435,6 +2459,24 @@ function bind(){
   const sset=(id,key,num)=>{ const el=$(id); el.onchange=()=>{ setShared(key,num?+el.value:el.value); save(); renderAll() } };
   sset("#pStart","pStart"); sset("#pEnd","pEnd"); sset("#fuelRate","fuel",1); sset("#levyRate","levy",1);
   $$(".fp").forEach(b=>b.onclick=()=>{ setShared("fuel",+b.dataset.v); save(); renderBillView(); renderHome(); toast("燃調を "+b.dataset.v+" 円/kWh にしました") });
+  $("#kabuImp").onclick=()=>{
+    const txt=$("#kabuTxt").value;
+    if(!txt.trim()) return toast("カブアンドの利用料金の画面を貼り付けてください");
+    let b;
+    try{ b=parseKabuBill(txt) }catch(e){ return toast(e.message) }
+    const exists=S.bills.some(x=>x.month===b.month);
+    const msg=`${b.month}分（${b.start}〜${b.end}・${b.days}日）\n`+
+      `使用量 ${b.kwh}kWh ＝ ${(b.kwh/b.days).toFixed(2)}kWh/日\n請求額 ${b.amount.toLocaleString()}円\n`+
+      `燃調 ${b.fuel}円 ／ 賦課金 ${b.levy}円\n\n`+(exists?"この月はすでにあります。上書きしますか？":"この内容で追加しますか？");
+    if(!confirm(msg)) return;
+    S.bills=S.bills.filter(x=>x.month!==b.month);
+    S.bills.push(Object.assign(b,{at:nowMs()}));
+    S.bills.sort((x,y)=>x.month<y.month?-1:1);
+    delete S.tomb["b:"+b.month];
+    save(); renderAll(); $("#kabuTxt").value="";
+    toast(b.month+"分を"+(exists?"上書き":"追加")+"しました（"+(b.kwh/b.days).toFixed(2)+" kWh/日）");
+    sparkBurst(10);
+  };
   $("#bAdd").onclick=()=>{
     const mo=$("#bMonth").value, s=$("#bStart").value, e=$("#bEnd").value, k=+$("#bKwh").value;
     if(!mo||!s||!e||!k) return toast("請求月・期間・kWh は必須です");
@@ -2590,6 +2632,18 @@ function bind(){
 
 /* ---------- boot ---------- */
 load();
+/* 2026年7月分・8月分の請求実績を一度だけ追加する（どちらの端末でも同じ内容になるよう更新時刻を固定） */
+{
+  let added=false;
+  [{month:"2026-07",start:"2026-06-22",end:"2026-07-21",days:30,kwh:263,amount:8209,fuel:807.40,levy:1099},
+   {month:"2026-08",start:"2026-07-22",end:"2026-08-23",days:33,kwh:278,amount:7840,fuel:-8.41,levy:1162}]
+  .forEach(b=>{
+    if(!S.bills.some(x=>x.month===b.month) && !S.tomb["b:"+b.month]){
+      S.bills.push(Object.assign({at:Date.UTC(2026,8,14)},b)); added=true;
+    }
+  });
+  if(added){ S.bills.sort((x,y)=>x.month<y.month?-1:1); save(); }
+}
 /* 洗濯乾燥機の導入をイベントとして一度だけ記録する */
 if(!S.events.some(e=>e.tag==="appliance"&&/洗濯乾燥機/.test(e.desc||""))){
   S.events.push({id:"seed-dryer-2025",date:"2025-07-25",tag:"appliance",at:1,by:"",desc:"ドラム式洗濯乾燥機を導入（以降 約+1.77 kWh/日 の恒常的な底上げ）"});
