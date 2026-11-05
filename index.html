@@ -465,7 +465,8 @@ details[open] summary:before{content:"▾ "}
   <div class="card">
     <h3><span class="dot"></span>前年同月比（kWh/日）</h3>
     <div style="margin-top:4px"><svg class="chart" id="chYoy" viewBox="0 0 340 165"></svg></div>
-    <div class="legend"><span><i style="background:#5eead4"></i>前年</span><span><i style="background:#fb7185"></i>今年</span></div>
+    <div class="legend"><span><i style="background:#5eead4"></i>前年</span><span><i style="background:#fb7185"></i>今年</span><span><i style="background:transparent;border:1.4px dashed #fb7185"></i>今年（記録から推定）</span></div>
+    <div class="tipbox" id="tipYoy"></div>
   </div>
 </section>
 
@@ -2001,16 +2002,66 @@ function showDaily(d,m){
     ${evs.length?`<div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:5px">${evs.map(e=>`<span class="tag t-${e.tag}">${tagLabel(e.tag)}${e.desc?" "+esc(e.desc):""}</span>`).join("")}</div>`:""}${hw}`;
 }
 
+/* ---------- 日次記録から「請求書がまだ無い期間」を組み立てる ----------
+   積算値なので、記録が飛び飛びでも2点の差はそのまま正確な使用量になる。
+   推定が入るのは期間の境目（検針日の0時）の値だけで、前後の記録から直線で補間する。
+   請求書が来たらそちらが優先され、推定は自動で消える */
+function readingPts(){
+  return S.readings.map(r=>{const[h,mi]=(r.time||"21:00").split(":").map(Number);
+    return {t:D.parse(r.date).getTime()+(h*60+mi)*60000, m:+r.meter}}).sort((a,b)=>a.t-b.t);
+}
+function meterAtT(pts,T){
+  for(let i=1;i<pts.length;i++){
+    const a=pts[i-1],b=pts[i];
+    if(a.t<=T&&T<=b.t){const f=b.t>a.t?(T-a.t)/(b.t-a.t):0;return {m:a.m+(b.m-a.m)*f, gapH:(b.t-a.t)/36e5}}
+  }
+  return null;
+}
+function virtualBills(){
+  const real=[...S.bills].sort((a,b)=>a.month<b.month?-1:1);
+  const pts=readingPts();
+  if(!real.length||pts.length<2) return [];
+  const lastT=pts[pts.length-1].t, out=[];
+  let start=D.add(real[real.length-1].end,1);
+  for(let k=0;k<24;k++){
+    const sd=D.parse(start);
+    const end=D.fmt(new Date(sd.getFullYear(),sd.getMonth()+1,sd.getDate()-1));
+    const T0=sd.getTime(), Tf=D.parse(D.add(end,1)).getTime();
+    if(T0<pts[0].t||T0>=lastT) break;
+    const partial=Tf>lastT, T1=partial?lastT:Tf;
+    const a=meterAtT(pts,T0), b=meterAtT(pts,T1);
+    if(!a||!b) break;
+    const hrs=(T1-T0)/36e5;
+    if(hrs<24*7) break;                                  /* 1週間未満は出さない */
+    const days=D.diff(start,end)+1, pd=(b.m-a.m)/hrs*24;
+    const seen=new Set(S.readings.filter(r=>r.date>=start&&r.date<=end).map(r=>r.date)).size;
+    const kwh=+(pd*days).toFixed(1);
+    out.push({month:D.ym(end),start,end,days,kwh,est:true,partial,
+      upto:partial?D.fmt(new Date(lastT)):end, elapsed:Math.round(hrs/24),
+      seen, gap:Math.max(a.gapH,partial?0:b.gapH),
+      amount:partial?null:billTotal(kwh,+S.settings.fuel,+S.settings.levy,+S.settings.tier3)});
+    if(partial) break;
+    start=D.add(end,1);
+  }
+  return out;
+}
+const allBills=()=>[...S.bills,...virtualBills()].sort((a,b)=>a.month<b.month?-1:1);
+function estNote(b){
+  if(!b.est) return "";
+  const rough=b.gap>72?`<br>⚠ 境目の前後で記録が${Math.round(b.gap/24)}日あいているため、月またぎの配分が粗めです`:"";
+  return `<div class="tiny" style="color:#fbbf24;margin-top:3px">📝 日次記録からの推定${b.partial?`（${D.md(b.upto)}までの${b.elapsed}日ぶん。期間末まで同じペースと仮定）`:""}。記録 ${b.seen}日／${b.partial?b.elapsed:b.days}日${rough}<br>請求書が来たら、そちらに置き換わります</div>`;
+}
+
 /* 年を決め打ちにしない。請求実績のある最新の年と、その前年を比べる */
 function twoYears(){
-  const ys=[...new Set(S.bills.map(b=>b.month.slice(0,4)))].sort();
+  const ys=[...new Set(allBills().map(b=>b.month.slice(0,4)))].sort();
   const Y2=ys[ys.length-1]||String(new Date().getFullYear());
   return {Y1:String(+Y2-1), Y2};
 }
 function renderChartMonthly(){
   const YY=twoYears();
   const svg=$("#chMonthly"); const W=340,H=175,L=26,R=6,T=10,B=30;
-  const bs=[...S.bills].sort((a,b)=>a.month<b.month?-1:1);
+  const bs=allBills();
   if(!bs.length){svg.innerHTML="";return}
   const vals=bs.map(b=>b.kwh/b.days);
   const maxV=Math.max(...vals)*1.2;
@@ -2026,11 +2077,13 @@ function renderChartMonthly(){
   let dots="";
   bs.forEach((b,i)=>{
     const c=b.month.startsWith(YY.Y1)?"#5eead4":"#ffb020";
-    dots+=`<circle cx="${x(i)}" cy="${y(b.kwh/b.days)}" r="3.4" fill="${c}" stroke="#0b0d1a" stroke-width="1.2" class="mhit" data-i="${i}" style="cursor:pointer"/>`;
+    dots+=b.est
+      ?`<circle cx="${x(i)}" cy="${y(b.kwh/b.days)}" r="3.6" fill="#0b0d1a" stroke="${c}" stroke-width="2" stroke-dasharray="2 1.5" class="mhit" data-i="${i}" style="cursor:pointer"/>`
+      :`<circle cx="${x(i)}" cy="${y(b.kwh/b.days)}" r="3.4" fill="${c}" stroke="#0b0d1a" stroke-width="1.2" class="mhit" data-i="${i}" style="cursor:pointer"/>`;
   });
   let xl="";
   bs.forEach((b,i)=>{ if(i%3===0||i===bs.length-1) xl+=`<text x="${x(i)}" y="${H-12}" text-anchor="middle">${b.month.slice(2).replace("-","/")}</text>` });
-  const peak=bs.reduce((a,b)=>b.kwh/b.days>a.kwh/a.days?b:a);
+  const peak=bs.filter(b=>!b.est).reduce((a,b)=>b.kwh/b.days>a.kwh/a.days?b:a,bs[0]);
   const pi=bs.indexOf(peak);
   const ann=`<text x="${Math.min(W-40,x(pi))}" y="${y(peak.kwh/peak.days)-8}" text-anchor="middle" fill="#ffb020" font-size="10" font-weight="800">${(peak.kwh/peak.days).toFixed(2)}</text>`;
   svg.innerHTML=g+seg(YY.Y1,"#5eead4")+seg(YY.Y2,"#ffb020")+dots+xl+ann;
@@ -2038,15 +2091,16 @@ function renderChartMonthly(){
   $$("#chMonthly .mhit").forEach(el=>el.onclick=()=>{
     const b=bs[+el.dataset.i];
     $("#tipMonthly").innerHTML=`<b>${b.month}</b>（${b.start}〜${b.end}／${b.days}日）<br>
-      <span class="num" style="font-size:17px;font-weight:900">${(b.kwh/b.days).toFixed(2)}</span> kWh/日　${b.kwh}kWh　${b.amount.toLocaleString()}円
-      <div class="tiny muted">燃調 ${b.fuel}円（${(b.fuel/b.kwh).toFixed(2)}円/kWh）／賦課金 ${b.levy}円</div>`;
+      <span class="num" style="font-size:17px;font-weight:900">${(b.kwh/b.days).toFixed(2)}</span> kWh/日　${b.partial?"着地見込み ":""}${b.kwh}kWh　${b.amount!=null?(b.est?"概算 ":"")+b.amount.toLocaleString()+"円":""}
+      ${b.est?estNote(b):`<div class="tiny muted">燃調 ${b.fuel}円（${(b.fuel/b.kwh).toFixed(2)}円/kWh）／賦課金 ${b.levy}円</div>`}`;
   });
 }
 
 function renderChartYoy(){
   const svg=$("#chYoy"); const W=340,H=165,L=26,R=6,T=10,B=26;
   const by={};
-  S.bills.forEach(b=>{const[y,mo]=b.month.split("-");(by[mo]=by[mo]||{})[y]=b.kwh/b.days});
+  const ab=allBills(), estOf={};
+  ab.forEach(b=>{const[y,mo]=b.month.split("-");(by[mo]=by[mo]||{})[y]=b.kwh/b.days; if(b.est) estOf[mo+"-"+y]=b});
   const YY=twoYears(), Y1=YY.Y1, Y2=YY.Y2;
   const months=Object.keys(by).filter(mo=>by[mo][Y1]&&by[mo][Y2]).sort();
   if(!months.length){svg.innerHTML=`<text x="170" y="85" text-anchor="middle" fill="#6b7490" font-size="12">比較できる月がありません</text>`;return}
@@ -2060,11 +2114,23 @@ function renderChartYoy(){
     const cx=L+gw*i+gw/2, bw=Math.min(15,gw*0.32);
     const a=by[mo][Y1],b=by[mo][Y2];
     bars+=`<rect x="${cx-bw-1.5}" y="${y(a)}" width="${bw}" height="${H-B-y(a)}" rx="3" fill="#5eead4" opacity=".9"/>`;
-    bars+=`<rect x="${cx+1.5}" y="${y(b)}" width="${bw}" height="${H-B-y(b)}" rx="3" fill="#fb7185" opacity=".9"/>`;
-    bars+=`<text x="${cx}" y="${y(Math.max(a,b))-4}" text-anchor="middle" fill="#fb7185" font-size="9" font-weight="800">+${((b/a-1)*100).toFixed(0)}%</text>`;
-    lbl+=`<text x="${cx}" y="${H-9}" text-anchor="middle">${+mo}月</text>`;
+    const e=estOf[mo+"-"+Y2], pc=(b/a-1)*100;
+    bars+=e
+      ?`<rect x="${cx+1.5}" y="${y(b)}" width="${bw}" height="${H-B-y(b)}" rx="3" fill="#fb7185" fill-opacity=".28" stroke="#fb7185" stroke-width="1.4" stroke-dasharray="3 2" class="yhit" data-mo="${mo}" style="cursor:pointer"/>`
+      :`<rect x="${cx+1.5}" y="${y(b)}" width="${bw}" height="${H-B-y(b)}" rx="3" fill="#fb7185" opacity=".9" class="yhit" data-mo="${mo}" style="cursor:pointer"/>`;
+    bars+=`<text x="${cx}" y="${y(Math.max(a,b))-4}" text-anchor="middle" fill="#fb7185" font-size="9" font-weight="800">${pc>=0?"+":""}${pc.toFixed(0)}%</text>`;
+    lbl+=`<text x="${cx}" y="${H-9}" text-anchor="middle">${+mo}月${e?"*":""}</text>`;
   });
   svg.innerHTML=g+bars+lbl;
+  const ests=months.filter(mo=>estOf[mo+"-"+Y2]);
+  const tip=$("#tipYoy");
+  if(tip) tip.innerHTML=ests.length
+    ?`<b>*</b> の月（点線の棒）は請求書がまだ無く、毎日の記録から推定しています。棒をタップすると詳細。`
+    :"すべて請求実績どうしの比較です。";
+  $$("#chYoy .yhit").forEach(el=>el.onclick=()=>{
+    const mo=el.dataset.mo, a=by[mo][Y1], b=by[mo][Y2], e=estOf[mo+"-"+Y2];
+    tip.innerHTML=`<b>${+mo}月分</b>　${Y1}年 ${a.toFixed(2)} → ${Y2}年 <span class="num" style="font-size:16px;font-weight:900">${b.toFixed(2)}</span> kWh/日（${b>=a?"+":""}${((b/a-1)*100).toFixed(0)}%）${e?`<div class="tiny muted">期間 ${e.start}〜${e.end}（推定の区切り）</div>`+estNote(e):""}`;
+  });
 }
 
 /* ==================================================================
