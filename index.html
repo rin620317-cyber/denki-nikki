@@ -458,7 +458,7 @@ details[open] summary:before{content:"▾ "}
   <div class="card">
     <h3><span class="dot"></span>月次 kWh/日 の推移（請求実績）</h3>
     <div style="margin-top:4px"><svg class="chart" id="chMonthly" viewBox="0 0 340 175"></svg></div>
-    <div class="legend"><span><i style="background:#5eead4"></i>2025年</span><span><i style="background:#ffb020"></i>2026年</span><span><i style="background:#4ade80"></i>元の水準</span></div>
+    <div class="legend"><span><i style="background:#5eead4"></i><span id="lgY1">2025年</span></span><span><i style="background:#ffb020"></i><span id="lgY2">2026年</span></span><span><i style="background:#4ade80"></i>元の水準</span></div>
     <div class="tipbox" id="tipMonthly">検針期間が28〜35日でバラつくため、月合計ではなく1日あたりで並べています。</div>
   </div>
 
@@ -2001,7 +2001,14 @@ function showDaily(d,m){
     ${evs.length?`<div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:5px">${evs.map(e=>`<span class="tag t-${e.tag}">${tagLabel(e.tag)}${e.desc?" "+esc(e.desc):""}</span>`).join("")}</div>`:""}${hw}`;
 }
 
+/* 年を決め打ちにしない。請求実績のある最新の年と、その前年を比べる */
+function twoYears(){
+  const ys=[...new Set(S.bills.map(b=>b.month.slice(0,4)))].sort();
+  const Y2=ys[ys.length-1]||String(new Date().getFullYear());
+  return {Y1:String(+Y2-1), Y2};
+}
 function renderChartMonthly(){
+  const YY=twoYears();
   const svg=$("#chMonthly"); const W=340,H=175,L=26,R=6,T=10,B=30;
   const bs=[...S.bills].sort((a,b)=>a.month<b.month?-1:1);
   if(!bs.length){svg.innerHTML="";return}
@@ -2018,7 +2025,7 @@ function renderChartMonthly(){
   };
   let dots="";
   bs.forEach((b,i)=>{
-    const c=b.month.startsWith("2025")?"#5eead4":"#ffb020";
+    const c=b.month.startsWith(YY.Y1)?"#5eead4":"#ffb020";
     dots+=`<circle cx="${x(i)}" cy="${y(b.kwh/b.days)}" r="3.4" fill="${c}" stroke="#0b0d1a" stroke-width="1.2" class="mhit" data-i="${i}" style="cursor:pointer"/>`;
   });
   let xl="";
@@ -2026,7 +2033,8 @@ function renderChartMonthly(){
   const peak=bs.reduce((a,b)=>b.kwh/b.days>a.kwh/a.days?b:a);
   const pi=bs.indexOf(peak);
   const ann=`<text x="${Math.min(W-40,x(pi))}" y="${y(peak.kwh/peak.days)-8}" text-anchor="middle" fill="#ffb020" font-size="10" font-weight="800">${(peak.kwh/peak.days).toFixed(2)}</text>`;
-  svg.innerHTML=g+seg("2025","#5eead4")+seg("2026","#ffb020")+dots+xl+ann;
+  svg.innerHTML=g+seg(YY.Y1,"#5eead4")+seg(YY.Y2,"#ffb020")+dots+xl+ann;
+  const lg=$("#lgY1"), lg2=$("#lgY2"); if(lg){lg.textContent=YY.Y1+"年"; lg2.textContent=YY.Y2+"年"}
   $$("#chMonthly .mhit").forEach(el=>el.onclick=()=>{
     const b=bs[+el.dataset.i];
     $("#tipMonthly").innerHTML=`<b>${b.month}</b>（${b.start}〜${b.end}／${b.days}日）<br>
@@ -2039,9 +2047,10 @@ function renderChartYoy(){
   const svg=$("#chYoy"); const W=340,H=165,L=26,R=6,T=10,B=26;
   const by={};
   S.bills.forEach(b=>{const[y,mo]=b.month.split("-");(by[mo]=by[mo]||{})[y]=b.kwh/b.days});
-  const months=Object.keys(by).filter(mo=>by[mo]["2025"]&&by[mo]["2026"]).sort();
+  const YY=twoYears(), Y1=YY.Y1, Y2=YY.Y2;
+  const months=Object.keys(by).filter(mo=>by[mo][Y1]&&by[mo][Y2]).sort();
   if(!months.length){svg.innerHTML=`<text x="170" y="85" text-anchor="middle" fill="#6b7490" font-size="12">比較できる月がありません</text>`;return}
-  const maxV=Math.max(...months.flatMap(mo=>[by[mo]["2025"],by[mo]["2026"]]))*1.22;
+  const maxV=Math.max(...months.flatMap(mo=>[by[mo][Y1],by[mo][Y2]]))*1.22;
   const gw=(W-L-R)/months.length;
   const y=v=>T+(1-v/maxV)*(H-T-B);
   let g="";
@@ -2049,7 +2058,7 @@ function renderChartYoy(){
   let bars="",lbl="";
   months.forEach((mo,i)=>{
     const cx=L+gw*i+gw/2, bw=Math.min(15,gw*0.32);
-    const a=by[mo]["2025"],b=by[mo]["2026"];
+    const a=by[mo][Y1],b=by[mo][Y2];
     bars+=`<rect x="${cx-bw-1.5}" y="${y(a)}" width="${bw}" height="${H-B-y(a)}" rx="3" fill="#5eead4" opacity=".9"/>`;
     bars+=`<rect x="${cx+1.5}" y="${y(b)}" width="${bw}" height="${H-B-y(b)}" rx="3" fill="#fb7185" opacity=".9"/>`;
     bars+=`<text x="${cx}" y="${y(Math.max(a,b))-4}" text-anchor="middle" fill="#fb7185" font-size="9" font-weight="800">+${((b/a-1)*100).toFixed(0)}%</text>`;
